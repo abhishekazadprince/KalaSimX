@@ -176,7 +176,7 @@ const SIMS = [
     { id: 'em', title: 'Electromagnetism', desc: 'Maxwell & Lorentz Dynamics', color: 'bg-violet-50 text-violet-600' },
     { id: 'thermo', title: 'Thermodynamics', desc: 'Stat Mech & 3 Laws', color: 'bg-orange-50 text-orange-600' },
     { id: 'wave', title: 'Wave Motion', desc: 'String, Sound & Light', color: 'bg-pink-50 text-pink-600' },
-    { id: 'optics', title: 'Speed of Light', desc: 'Relativity', color: 'bg-cyan-50 text-cyan-600' },
+    { id: 'relativity', title: 'Relativity & Aberration', desc: 'The Speed of Light Paradox', color: 'bg-cyan-50 text-cyan-600' },
 ];
 
 const PROFILE = { name: "Abhishek Kumar", role: "Physics Faculty (9+ yrs)", details: ["B.Tech (CSE)", "Ex-Faculty: Jaipuria School", "Ex-Faculty: S.P. College Pune", "Expert: Python, LaTeX"] };
@@ -446,7 +446,7 @@ const ThermoSolver = () => {
     return ( <div className={`flex flex-col h-[calc(100dvh-60px)] -m-4 relative ${fullScreen ? 'fixed inset-0 z-50 m-0 bg-slate-950' : ''}`}> <div className={`relative transition-all duration-500 bg-slate-900 overflow-hidden shadow-xl z-20 ${fullScreen ? 'absolute inset-0 h-full' : 'h-[35%] shrink-0'}`}> <SimCanvas draw={draw} initZoom={15} /> <div className="absolute top-4 right-4 flex items-center gap-3"> <button onClick={() => init('mixing')} className="p-2 rounded-full bg-slate-800/80 text-slate-400 hover:text-white backdrop-blur"><Icons.Close /></button> <button onClick={() => setPlaying(!playing)} className="p-2 rounded-full bg-blue-600/90 text-white shadow-lg backdrop-blur">{playing ? "||" : "▶"}</button> <button onClick={() => setFullScreen(!fullScreen)} className="p-2 rounded-full bg-slate-800/80 text-slate-400 hover:text-white backdrop-blur">⛶</button> </div> <div className="absolute bottom-4 left-4 text-[10px] font-mono text-slate-400 flex gap-4"> <span>P: {statsRef.current.P.toFixed(2)}</span><span>T: {statsRef.current.T.toFixed(2)}</span><span>S: {statsRef.current.S.toFixed(2)}</span> </div> </div> {!fullScreen && ( <div className="flex-1 flex flex-col bg-slate-950 overflow-hidden"> <div className="flex border-b border-slate-800 shrink-0"> {['lab', 'table', 'graph'].map(id => (<button key={id} onClick={() => setTab(id)} className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-widest transition ${tab === id ? 'text-blue-400 bg-slate-900 border-b-2 border-blue-500' : 'text-slate-600 hover:text-slate-400'}`}>{id}</button>))} </div> <div className="flex-1 overflow-hidden relative"> {tab === 'lab' && ( <div className="h-full overflow-y-auto p-4 space-y-4 no-scrollbar"> <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">{Object.entries(PRESETS).map(([k, v]) => (<button key={k} onClick={() => { setConfig({...config, force:v.force}); init(v.setup); }} className="shrink-0 px-3 py-1 rounded border border-slate-700 text-[10px] font-bold text-slate-400 hover:bg-slate-800 hover:text-white transition">{v.name}</button>))}</div> <div className="grid gap-4"> <div className="space-y-2"><div className="text-[10px] font-bold text-orange-500 uppercase">Process Control</div> <div className="glass-panel p-3 rounded flex flex-col gap-2"> <div className="flex justify-between text-xs text-slate-400"><span>Heat Injection (T)</span><span>{config.heat}</span></div> <input type="range" min="0" max="2" step="0.1" value={config.heat} onChange={e=>setConfig({...config, heat:parseFloat(e.target.value)})} className="w-full h-1 bg-orange-900 rounded appearance-none accent-orange-500" /> <div className="flex justify-between text-xs text-slate-400 mt-2"><span>Volume (V)</span><span>{config.volume}</span></div> <input type="range" min="0.3" max="1" step="0.1" value={config.volume} onChange={e=>setConfig({...config, volume:parseFloat(e.target.value)})} className="w-full h-1 bg-blue-900 rounded appearance-none accent-blue-500" /> </div> </div> <EqInput label="Interaction Potential F(r)" sub="Force =" val={config.force} set={v=>setConfig({...config, force:v})} color="border-emerald-500" /> </div> </div> )} {tab === 'table' && ( <div className="h-full flex flex-col"> <div className="p-2 flex justify-between bg-slate-900 border-b border-slate-800"><span className="text-[10px] text-slate-500 pt-1">Thermodynamic State</span><button onClick={()=>{const doc=new jspdf.jsPDF();doc.autoTable({head:[['Time','P','V','T','S']],body:displayData.map(d=>[d.t.toFixed(2),d.P.toFixed(2),d.V.toFixed(0),d.T.toFixed(2),d.S.toFixed(3)])});doc.save('thermo_data.pdf')}} className="bg-slate-800 text-white text-[10px] px-3 py-1 rounded border border-slate-700">PDF</button></div> <div className="flex-1 overflow-auto scroller"><table className="data-table"><thead><tr><th>t</th><th>P</th><th>V</th><th>T</th><th>S</th></tr></thead><tbody>{displayData.slice().reverse().map((r, i) => (<tr key={i}><td className="text-blue-400">{r.t.toFixed(1)}</td><td>{r.P.toFixed(2)}</td><td>{r.V.toFixed(0)}</td><td>{r.T.toFixed(2)}</td><td>{r.S.toFixed(2)}</td></tr>))}</tbody></table></div> </div> )} {tab === 'graph' && (<div className="h-full overflow-y-auto p-4 space-y-4 no-scrollbar"><div className="grid grid-cols-2 gap-3"><GraphCard title="PV Diagram" data={displayData} x="V" y="P" col="#fbbf24" /><GraphCard title="Entropy vs Time" data={displayData} x="t" y="S" col="#10b981" /></div></div>)} </div> </div> )} </div> );
 };
 
-// --- 4. WAVESOLVER (NEW: REPLACES PENDULUM) ---
+// --- 4. WAVESOLVER ---
 const WaveSolver = () => {
     const PRESETS = {
         string: { name: "String (Transverse)", type: 'trans', eq: "3 * sin(x - 2*t)", desc: "y = A sin(kx - wt)" },
@@ -535,13 +535,70 @@ const WaveSolver = () => {
     return ( <div className={`flex flex-col h-[calc(100dvh-60px)] -m-4 relative ${fullScreen ? 'fixed inset-0 z-50 m-0 bg-slate-950' : ''}`}> <div className={`relative transition-all duration-500 bg-slate-900 overflow-hidden shadow-xl z-20 ${fullScreen ? 'absolute inset-0 h-full' : 'h-[35%] shrink-0'}`}> <SimCanvas draw={draw} initZoom={25} /> <div className="absolute top-4 right-4 flex items-center gap-3"> <button onClick={() => { timeRef.current=0; setDisplayData([]); }} className="p-2 rounded-full bg-slate-800/80 text-slate-400 hover:text-white backdrop-blur"><Icons.Reset /></button> <button onClick={() => setPlaying(!playing)} className="p-2 rounded-full bg-blue-600/90 text-white shadow-lg backdrop-blur">{playing ? "||" : "▶"}</button> <button onClick={() => setFullScreen(!fullScreen)} className="p-2 rounded-full bg-slate-800/80 text-slate-400 hover:text-white backdrop-blur">⛶</button> </div> <div className="absolute bottom-4 left-4 text-[10px] font-mono text-slate-400"> <span className="text-pink-400 font-bold">{config.name}</span> | y(x,t) </div> </div> {!fullScreen && ( <div className="flex-1 flex flex-col bg-slate-950 overflow-hidden"> <div className="flex border-b border-slate-800 shrink-0"> {['sim', 'table', 'graph'].map(id => (<button key={id} onClick={() => setTab(id)} className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-widest transition ${tab === id ? 'text-blue-400 bg-slate-900 border-b-2 border-blue-500' : 'text-slate-600 hover:text-slate-400'}`}>{id}</button>))} </div> <div className="flex-1 overflow-hidden relative"> {tab === 'sim' && ( <div className="h-full overflow-y-auto p-4 space-y-4 no-scrollbar"> <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800 mb-4"> <div className="text-[10px] font-bold text-slate-500 uppercase mb-2">Wave Equation</div> <div className="font-mono text-white text-sm">y(x,t) = A sin(kx - ωt + φ)</div> </div> <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">{Object.entries(PRESETS).map(([k, v]) => (<button key={k} onClick={() => { setConfig(v); setEqStr(v.eq); }} className="shrink-0 px-3 py-1 rounded border border-slate-700 text-[10px] font-bold text-slate-400 hover:bg-slate-800 hover:text-white transition">{v.name}</button>))}</div> <EqInput label="Wave Function y(x,t)" sub="y =" val={eqStr} set={setEqStr} color="border-pink-500" /> </div> )} {tab === 'table' && ( <div className="h-full flex flex-col"> <div className="p-2 flex justify-between bg-slate-900 border-b border-slate-800"><span className="text-[10px] text-slate-500 pt-1">Source Displacement (x=0)</span><button onClick={()=>{const doc=new jspdf.jsPDF();doc.autoTable({head:[['Time','Y (x=0)']],body:displayData.map(d=>[d.t.toFixed(2),d.y.toFixed(4)])});doc.save('wave_data.pdf')}} className="bg-slate-800 text-white text-[10px] px-3 py-1 rounded border border-slate-700">PDF</button></div> <div className="flex-1 overflow-auto scroller"><table className="data-table"><thead><tr><th>t</th><th>y (x=0)</th></tr></thead><tbody>{displayData.slice().reverse().map((r, i) => (<tr key={i}><td className="text-blue-400">{r.t.toFixed(2)}</td><td>{r.y.toFixed(4)}</td></tr>))}</tbody></table></div> </div> )} {tab === 'graph' && (<div className="h-full overflow-y-auto p-4 space-y-4 no-scrollbar"><GraphCard title="Source Oscillation (y vs t at x=0)" data={displayData} x="t" y="y" col="#ec4899" /></div>)} </div> </div> )} </div> );
 };
 
+// --- 5. RELATIVITY SOLVER (NEW: REPLACES OPTICS) ---
+const RelativitySolver = () => {
+    const [fullScreen, setFullScreen] = useState(false); const [tab, setTab] = useState('story'); 
+    const [speed, setSpeed] = useState(30); // Earth speed simulation
+    
+    // Sim State
+    const timeRef = useRef(0);
+    useEffect(() => {
+        let frame;
+        const loop = () => { timeRef.current += 1; frame = requestAnimationFrame(loop); };
+        loop(); return () => cancelAnimationFrame(frame);
+    }, []);
+
+    const draw = (ctx, project, w, h) => {
+        const t = timeRef.current;
+        const angle = Math.atan(speed / 100); // Exaggerated for visualization
+        
+        // Background Stars
+        ctx.fillStyle = '#ffffff';
+        for(let i=0; i<20; i++) {
+            const sx = (i*43 + t*0.1) % w;
+            const sy = (i*29) % h;
+            ctx.beginPath(); ctx.arc(sx, sy, 1, 0, 7); ctx.fill();
+        }
+
+        // Mode: Rain/Umbrella Analogy
+        const cx = w/2; const cy = h/2;
+        
+        // Rain (Vertical Light)
+        ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 1;
+        for(let x = -200; x < 200; x+=20) {
+            const rx = cx + x - (t*speed*0.05)%20; 
+            const dropY = (t*5 + x)%h;
+            // Draw rain relative to moving frame
+            ctx.beginPath(); ctx.moveTo(rx, dropY); ctx.lineTo(rx - Math.tan(angle)*20, dropY+20); ctx.stroke();
+        }
+
+        // Runner/Earth
+        const runnerX = cx; const runnerY = h - 60;
+        ctx.fillStyle = '#22d3ee';
+        ctx.beginPath(); ctx.arc(runnerX, runnerY, 10, 0, 7); ctx.fill();
+        
+        // Telescope/Umbrella
+        const len = 40;
+        const ex = runnerX + Math.sin(angle)*len;
+        const ey = runnerY - Math.cos(angle)*len;
+        ctx.strokeStyle = '#facc15'; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(runnerX, runnerY); ctx.lineTo(ex, ey); ctx.stroke();
+        
+        // Label
+        ctx.fillStyle = '#fff'; ctx.font = '10px monospace';
+        ctx.fillText(`Angle: ${(angle * 180/Math.PI).toFixed(1)}°`, runnerX + 20, runnerY - 20);
+    };
+
+    return ( <div className={`flex flex-col h-[calc(100dvh-60px)] -m-4 relative ${fullScreen ? 'fixed inset-0 z-50 m-0 bg-slate-950' : ''}`}> <div className={`relative transition-all duration-500 bg-slate-900 overflow-hidden shadow-xl z-20 ${fullScreen ? 'absolute inset-0 h-full' : 'h-[35%] shrink-0'}`}> <SimCanvas draw={draw} initZoom={25} /> <div className="absolute top-4 right-4 flex items-center gap-3"> <button onClick={() => setFullScreen(!fullScreen)} className="p-2 rounded-full bg-slate-800/80 text-slate-400 hover:text-white backdrop-blur">⛶</button> </div> </div> {!fullScreen && ( <div className="flex-1 flex flex-col bg-slate-950 overflow-hidden"> <div className="flex border-b border-slate-800 shrink-0"> {['story', 'sim'].map(id => (<button key={id} onClick={() => setTab(id)} className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-widest transition ${tab === id ? 'text-blue-400 bg-slate-900 border-b-2 border-blue-500' : 'text-slate-600 hover:text-slate-400'}`}>{id}</button>))} </div> <div className="flex-1 overflow-hidden relative"> {tab === 'story' && ( <div className="h-full overflow-y-auto p-4 space-y-6 no-scrollbar text-slate-300 text-sm leading-relaxed"> <div className="space-y-4"> <h3 className="text-lg font-bold text-white">The Tale of Light's Secret</h3> <p>My dear friends,</p> <p>As always, the story begins with the sky... that infinite mystery. It starts with a star, Gamma Draconis. In 1669, <strong>Robert Hooke</strong> looked at it, hoping to prove the Earth moves by finding <em>Parallax</em> (the shift in position due to distance). He thought he found it!</p>  <p>But truth is not so easily caught. In 1725, <strong>James Bradley</strong> looked deeper. He saw a shift, but in the wrong direction! It wasn't Parallax. It was something new.</p> <h4 className="text-white font-bold mt-4">The Rain & The Runner</h4> <p>Bradley realized: If you stand in rain, you hold your umbrella straight. But if you run? You must tilt it forward!  The rain hasn't changed angle, but your speed creates an <em>Aberration</em>.</p> <p>Earth is running through the "rain" of starlight. We tilt our telescopes not because the star moved, but because <em>we</em> are moving.</p> <h4 className="text-white font-bold mt-4">The Ether Paradox</h4> <p>Scientists like Young thought space was filled with "Ether", like wind blowing through trees.  They tried to measure this wind (Arago, Michelson). But they found... nothing. Zero. The universe laughed at their theories. This silence led to Einstein and Relativity.</p> </div> </div> )} {tab === 'sim' && ( <div className="h-full overflow-y-auto p-4 space-y-4 no-scrollbar"> <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800 mb-4"> <div className="text-[10px] font-bold text-slate-500 uppercase mb-2">ABERRATION FORMULA</div> <div className="font-mono text-white text-sm">tan(θ) = v / c</div> <div className="text-xs text-slate-400 mt-1">v = Earth Speed, c = Speed of Light</div> </div> <div className="space-y-2"> <div className="flex justify-between text-xs text-slate-400"><span>Observer Speed (v)</span><span>{speed} km/s</span></div> <input type="range" min="0" max="100" value={speed} onChange={e=>setSpeed(parseFloat(e.target.value))} className="w-full h-1 bg-cyan-900 rounded appearance-none accent-cyan-500" /> </div> <div className="grid grid-cols-2 gap-3 mt-4"> <div className="bg-slate-900 p-3 rounded border border-slate-800"> <div className="text-[10px] text-slate-500">Tilt Angle (θ)</div> <div className="text-xl text-yellow-400 font-mono">{(Math.atan(speed/100)*180/Math.PI).toFixed(2)}°</div> </div> <div className="bg-slate-900 p-3 rounded border border-slate-800"> <div className="text-[10px] text-slate-500">Sun Light Delay</div> <div className="text-xl text-cyan-400 font-mono">8m 12s</div> </div> </div> </div> )} </div> </div> )} </div> );
+};
+
 // --- SIM CANVAS (FALLBACK) ---
 const SimCanvasFallback = ({ type }) => {
     const canvasRef = useRef(null);
     useEffect(() => {
         const canvas = canvasRef.current; const ctx = canvas.getContext('2d'); let t = 0; let id;
         const render = () => { t++; const w = canvas.width = canvas.parentElement.clientWidth; const h = canvas.height = 240; ctx.fillStyle = '#1e293b'; ctx.fillRect(0,0,w,h); const cx = w/2, cy = h/2;
-            if(type === 'optics') { const lx = (t*10)%w; ctx.beginPath(); ctx.arc(lx, cy, 4, 0, 7); ctx.fillStyle='#facc15'; ctx.fill(); ctx.fillStyle='#fff'; ctx.fillText('Photon c', 10, cy-20); }
+            if(type === 'pendulum') { ctx.fillStyle = '#f8fafc'; ctx.fillRect(0,0,w,h); const ang = Math.sin(t*0.05) * Math.PI/4; const bx = cx + 120*Math.sin(ang); const by = 20 + 120*Math.cos(ang); ctx.beginPath(); ctx.moveTo(cx,20); ctx.lineTo(bx,by); ctx.strokeStyle='#475569'; ctx.stroke(); ctx.beginPath(); ctx.arc(bx, by, 12, 0, 7); ctx.fillStyle='#e11d48'; ctx.fill(); }
             id = requestAnimationFrame(render);
         }; render(); return () => cancelAnimationFrame(id);
     }, [type]);
@@ -570,7 +627,7 @@ const App = () => {
                 {view === 'home' && (
                     <div className="space-y-6">
                         
-                        {/* REPLACED HEADER: KALA-SIMUX */}
+                        {/* HEADER: KALA-SIMUX */}
                         <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 mb-6 flex justify-center">
                             <img 
                                 src="Kala-SimuX.png" 
@@ -590,8 +647,8 @@ const App = () => {
                     <div className="animate-in slide-in-from-bottom duration-300">
                         <button onClick={() => setView('home')} className="flex items-center gap-2 text-slate-500 mb-4 font-bold text-sm"><Icons.Back /> Back</button>
                         <h2 className="text-2xl font-bold text-slate-900 mb-2">{SIMS.find(s=>s.id===sim)?.title}</h2>
-                        {sim === 'orbit' ? <ODESolver /> : sim === 'em' ? <EMSolver /> : sim === 'thermo' ? <ThermoSolver /> : sim === 'wave' ? <WaveSolver /> : <SimCanvasFallback type={sim} />}
-                        {sim !== 'orbit' && sim !== 'em' && sim !== 'thermo' && sim !== 'wave' && <div className="mt-4 p-4 bg-blue-50 border border-blue-100 rounded-xl text-sm text-blue-900"><strong>Note:</strong> Visualize the change. This simulation runs in real-time.</div>}
+                        {sim === 'orbit' ? <ODESolver /> : sim === 'em' ? <EMSolver /> : sim === 'thermo' ? <ThermoSolver /> : sim === 'wave' ? <WaveSolver /> : sim === 'relativity' ? <RelativitySolver /> : <SimCanvasFallback type={sim} />}
+                        {sim !== 'orbit' && sim !== 'em' && sim !== 'thermo' && sim !== 'wave' && sim !== 'relativity' && <div className="mt-4 p-4 bg-blue-50 border border-blue-100 rounded-xl text-sm text-blue-900"><strong>Note:</strong> Visualize the change. This simulation runs in real-time.</div>}
                     </div>
                 )}
                 {view === 'books' && (<div className="space-y-4"><h2 className="font-bold text-xl text-slate-800">Study Material</h2>{BOOKS.map(b => (<div key={b.id} className="bg-white rounded-xl p-4 shadow-sm border border-slate-100 flex gap-4"><div className={`w-20 h-24 shrink-0 rounded flex items-center justify-center ${b.color}`}><Icons.Book /></div><div className="flex-1 flex flex-col"><h3 className="font-bold text-slate-900 leading-tight">{b.title}</h3><p className="text-xs text-slate-500 mt-1 mb-2">{b.desc}</p><div className="mt-auto flex justify-between items-center"><span className="text-xs font-bold bg-green-100 text-green-700 px-2 py-1 rounded">{b.price}</span><a href={b.link} target="_blank" className="text-xs font-bold bg-slate-900 text-white px-3 py-2 rounded">Buy Now</a></div></div></div>))}</div>)}
