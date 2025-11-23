@@ -19,21 +19,19 @@
         body { -webkit-tap-highlight-color: transparent; user-select: none; font-family: sans-serif; background-color: #f8fafc; overscroll-behavior-y: none; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         
-        /* 3D Canvas Cursor & Touch - EXACT FROM SCREENTOUCH */
+        /* EXACT TOUCH STYLES FROM SCREENTOUCH.HTML */
         canvas { cursor: grab; touch-action: none; }
         canvas:active { cursor: grabbing; }
 
-        /* Advanced UI Styles */
+        /* UI Styles */
         .scroller::-webkit-scrollbar { width: 4px; height: 4px; }
         .scroller::-webkit-scrollbar-track { background: #0f172a; }
-        .scroller::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
+        .scroller::-webkit-scrollbar-thumb { background: #3b82f6; border-radius: 2px; }
         .glass-panel { background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(8px); border-bottom: 1px solid rgba(51, 65, 85, 0.5); }
         .input-field { background: rgba(30, 41, 59, 0.5); border: 1px solid rgba(71, 85, 105, 0.5); color: #fff; font-family: monospace; }
         .input-field:focus { border-color: #3b82f6; outline: none; background: rgba(30, 41, 59, 0.8); }
-        .data-table { width: 100%; font-size: 10px; font-family: monospace; border-collapse: collapse; }
-        .data-table th { background: #1e293b; position: sticky; top: 0; z-index: 10; text-align: left; padding: 8px; color: #94a3b8; }
-        .data-table td { border-bottom: 1px solid #1e293b; padding: 4px 8px; color: #cbd5e1; }
-        .data-table tr:nth-child(even) { background: rgba(255,255,255,0.02); }
+        .eq-input { background: #1e293b; color: #a5f3fc; font-family: 'Courier New', monospace; border: 1px solid #334155; border-radius: 4px; padding: 4px 8px; font-size: 12px; width: 100%; outline: none; }
+        .eq-input:focus { border-color: #3b82f6; background: #0f172a; }
     </style>
 </head>
 <body>
@@ -49,7 +47,7 @@
 <script type="text/babel">
 const { useState, useEffect, useRef } = React;
 
-// --- ICONS ---
+// --- ICONS (Merged) ---
 const Icons = {
     Menu: () => <svg width="24" height="24" fill="none" stroke="#1e293b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>,
     Back: () => <svg width="24" height="24" fill="none" stroke="#1e293b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>,
@@ -64,7 +62,7 @@ const Icons = {
     Full: () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
 };
 
-// --- 3D CAMERA CONTROLLER (EXACT COPY FROM SCREENTOUCH) ---
+// --- CORE: 3D CAMERA CONTROLLER (EXACTLY FROM SCREENTOUCH.HTML) ---
 const useOrbitControls = (ref, initialZoom = 30) => {
     const camera = useRef({ yaw: 0.5, pitch: 0.3, zoom: initialZoom });
     const drag = useRef({ active: false, x: 0, y: 0 });
@@ -93,8 +91,8 @@ const useOrbitControls = (ref, initialZoom = 30) => {
         };
         const end = () => drag.current.active = false;
         
-        el.addEventListener('mousedown', start); el.addEventListener('touchstart', start);
-        window.addEventListener('mousemove', move); window.addEventListener('touchmove', move);
+        el.addEventListener('mousedown', start); el.addEventListener('touchstart', start, {passive: false});
+        window.addEventListener('mousemove', move); window.addEventListener('touchmove', move, {passive: false});
         window.addEventListener('mouseup', end); window.addEventListener('touchend', end);
 
         return () => {
@@ -106,429 +104,270 @@ const useOrbitControls = (ref, initialZoom = 30) => {
     return camera;
 };
 
-// --- DATA ---
-const BOOKS = [
-    { id: 1, title: "Physics Concept Builder Vol 1", price: "₹450", link: "https://amzn.in/d/hCAUILC", desc: "For JEE Main & Advanced", color: "bg-orange-100 text-orange-800" },
-    { id: 2, title: "Advanced Problems in Physics", price: "₹650", link: "https://amzn.in/d/gSdEWNs", desc: "Problem Collection", color: "bg-blue-100 text-blue-800" },
-    { id: 3, title: "Digital Physics Interactive", price: "₹200", link: "https://play.google.com/store/books/details?id=dINYEQAAQBAJ", desc: "e-Book Edition", color: "bg-green-100 text-green-800" }
-];
+// --- CORE: SIM CANVAS (EXACTLY FROM SCREENTOUCH.HTML) ---
+const SimCanvas = ({ draw, initZoom=30 }) => {
+    const canvasRef = useRef(null);
+    const cam = useOrbitControls(canvasRef, initZoom);
 
-const SIMS = [
-    { id: 'orbit', title: 'N-Body ODE Solver', desc: 'Coupled Differential Equations', color: 'bg-indigo-50 text-indigo-600' },
-    { id: 'em', title: 'Electromagnetism', desc: 'Maxwell & Lorentz Dynamics', color: 'bg-violet-50 text-violet-600' },
-    { id: 'thermo', title: 'Thermodynamics', desc: 'Stat Mech & 3 Laws', color: 'bg-orange-50 text-orange-600' },
-    { id: 'pendulum', title: 'Pendulum (SHM)', desc: 'Oscillations', color: 'bg-pink-50 text-pink-600' },
-    { id: 'optics', title: 'Speed of Light', desc: 'Relativity', color: 'bg-cyan-50 text-cyan-600' },
-];
+    useEffect(() => {
+        const cvs = canvasRef.current;
+        const ctx = cvs.getContext('2d');
+        let fid;
 
-const PROFILE = { name: "Abhishek Kumar", role: "Physics Faculty (9+ yrs)", details: ["B.Tech (CSE)", "Ex-Faculty: Jaipuria School", "Ex-Faculty: S.P. College Pune", "Expert: Python, LaTeX"] };
+        const render = () => {
+            const w = cvs.width = cvs.clientWidth;
+            const h = cvs.height = cvs.clientHeight;
+            const cx = w/2, cy = h/2;
 
-// --- HELPERS ---
-const parseEq = (eq) => {
-    if (!eq) return "0";
-    let s = eq.toLowerCase().replace(/\s/g, '').replace(/\^/g, '**');
-    ['sin','cos','tan','sqrt','exp','log','abs','pi'].forEach(f => s = s.replaceAll(f, `Math.${f.toUpperCase() === 'PI' ? 'PI' : f}`));
-    return s;
+            ctx.fillStyle = '#020617'; // Dark Slate
+            ctx.fillRect(0,0,w,h);
+
+            // 3D Projection Function (Exact copy)
+            const project = (x,y,z) => {
+                const { yaw, pitch, zoom } = cam.current;
+                // Rotate Y
+                let x1 = x * Math.cos(yaw) - z * Math.sin(yaw);
+                let z1 = z * Math.cos(yaw) + x * Math.sin(yaw);
+                // Rotate X
+                let y2 = y * Math.cos(pitch) - z1 * Math.sin(pitch);
+                let z2 = z1 * Math.cos(pitch) + y * Math.sin(pitch);
+                // Perspective
+                const scale = 500 / (500 - z2) * zoom;
+                return {
+                    x: cx + x1 * scale,
+                    y: cy - y2 * scale, // Invert Y for typical physics coords
+                    s: scale,
+                    z: z2
+                };
+            };
+
+            // Call specific simulation draw logic
+            if(draw) draw(ctx, project, w, h);
+
+            fid = requestAnimationFrame(render);
+        };
+        render();
+        return () => cancelAnimationFrame(fid);
+    }, [draw]);
+
+    return <canvas ref={canvasRef} className="w-full h-full block" />;
 };
 
-// --- COMPONENTS ---
-const EqInput = ({ label, sub, val, set, color }) => (
-    <div className={`bg-slate-900 p-3 rounded border-l-2 ${color} flex flex-col gap-1`}>
-        <span className="text-[10px] font-bold text-slate-500 uppercase">{label}</span>
-        <div className="flex gap-2 items-center">
-            <span className="text-xs font-mono text-slate-400 shrink-0">{sub}</span>
-            <input value={val} onChange={e=>set(e.target.value)} className="input-field w-full rounded px-2 py-1 text-xs" spellCheck="false" />
-        </div>
+// --- HELPERS (Merged) ---
+const parseMath = (str) => {
+    try {
+        if(!str) return "0";
+        let s = str.toLowerCase().replace(/\s/g,'');
+        s = s.replace(/\^/g, '**'); // Power
+        ['sin','cos','tan','sqrt','exp','log','abs','pi'].forEach(f => {
+            s = s.replaceAll(f, `Math.${f.toUpperCase()==='PI'?'PI':f}`);
+        });
+        return s;
+    } catch(e) { return "0"; }
+};
+
+const InputRow = ({ label, val, set }) => (
+    <div className="flex items-center gap-2 bg-slate-950 border border-slate-800 rounded px-2 py-1">
+        <span className="text-xs font-mono text-slate-400 shrink-0">{label}</span>
+        <input className="eq-input" value={val} onChange={e=>set(e.target.value)} spellCheck="false"/>
     </div>
 );
 
-const GraphCard = ({ title, data, x, y, col }) => {
-    if(data.length < 2) return <div className="bg-slate-900 h-24 rounded border border-slate-800 flex items-center justify-center text-[10px] text-slate-600">No Data</div>;
-    const xs = data.map(d=>d[x]); const ys = data.map(d=>d[y]);
-    const minX = Math.min(...xs), maxX = Math.max(...xs);
-    const minY = Math.min(...ys), maxY = Math.max(...ys);
-    const pts = data.map(d => {
-        const px = ((d[x] - minX) / (maxX - minX || 1)) * 100;
-        const py = 100 - ((d[y] - minY) / (maxY - minY || 1)) * 100;
-        return `${px},${py}`;
-    }).join(' ');
-    return (
-        <div className="bg-slate-900 p-2 rounded border border-slate-800">
-            <div className="text-[10px] text-slate-400 mb-1">{title}</div>
-            <svg viewBox="0 0 100 100" className="w-full h-16 bg-slate-950/50 rounded overflow-hidden" preserveAspectRatio="none">
-                <polyline points={pts} fill="none" stroke={col} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
-            </svg>
-        </div>
-    );
-};
-
-// --- 1. ODESOLVER (MECHANICS) ---
-const ODESolver = () => {
-    const PRESETS = {
-        shm: { name: "Simple Harmonic", mode: 'newtonian', x: "-4*x", y: "-4*y", z: "-4*z", setup: {x:3, y:2, z:0, vx:0, vy:0, vz:2} },
-        lorenz: { name: "Lorenz Attractor", mode: 'flow', x: "10*(y-x)", y: "x*(28-z)-y", z: "x*y - (8/3)*z", setup: {x:0.1, y:0, z:0, vx:0, vy:0, vz:0} },
-        gravity: { name: "Orbit (Gravity)", mode: 'newtonian', x: "-100*x / (x^2+y^2)^1.5", y: "-100*y / (x^2+y^2)^1.5", z: "0", setup: {x:5, y:0, z:0, vx:0, vy:4.5, vz:0} }
-    };
-    const [fullScreen, setFullScreen] = useState(false); const [tab, setTab] = useState('eq'); const [playing, setPlaying] = useState(true);
-    const [mode, setMode] = useState('newtonian'); const [eqs, setEqs] = useState({ x: PRESETS.shm.x, y: PRESETS.shm.y, z: PRESETS.shm.z }); const [dt, setDt] = useState(0.02);
-    const historyRef = useRef([]); const [displayData, setDisplayData] = useState([]); const bodiesRef = useRef([{ x: 3, y: 2, z: 0, vx: 0, vy: 0, vz: 2, ax: 0, ay: 0, az: 0 }]); const timeRef = useRef(0); const funcRef = useRef(null); 
-    useEffect(() => { try { funcRef.current = new Function('x','y','z','vx','vy','vz','t', `return { fx: ${parseEq(eqs.x)}, fy: ${parseEq(eqs.y)}, fz: ${parseEq(eqs.z)} };`); } catch(e) { } }, [eqs]);
-    const loadPreset = (key) => { const p = PRESETS[key]; setMode(p.mode); setEqs({ x: p.x, y: p.y, z: p.z }); bodiesRef.current = [{ ...p.setup, ax:0, ay:0, az:0 }]; timeRef.current = 0; historyRef.current = []; setDisplayData([]); setDt(p.mode === 'flow' ? 0.01 : 0.02); };
-    useEffect(() => { let frameId; const loop = () => { if (!playing || !funcRef.current) return; const b = bodiesRef.current[0]; const t = timeRef.current; const calc = funcRef.current;
-            const evalState = (x, y, z, vx, vy, vz, t) => { const res = calc(x, y, z, vx, vy, vz, t); return mode === 'newtonian' ? { dx: vx, dy: vy, dz: vz, dvx: res.fx, dvy: res.fy, dvz: res.fz } : { dx: res.fx, dy: res.fy, dz: res.fz, dvx: 0, dvy: 0, dvz: 0 }; };
-            try { const k1 = evalState(b.x, b.y, b.z, b.vx, b.vy, b.vz, t); const k2 = evalState(b.x+k1.dx*0.5*dt, b.y+k1.dy*0.5*dt, b.z+k1.dz*0.5*dt, b.vx+k1.dvx*0.5*dt, b.vy+k1.dvy*0.5*dt, b.vz+k1.dvz*0.5*dt, t+0.5*dt); const k3 = evalState(b.x+k2.dx*0.5*dt, b.y+k2.dy*0.5*dt, b.z+k2.dz*0.5*dt, b.vx+k2.dvx*0.5*dt, b.vy+k2.dvy*0.5*dt, b.vz+k2.dvz*0.5*dt, t+0.5*dt); const k4 = evalState(b.x+k3.dx*dt, b.y+k3.dy*dt, b.z+k3.dz*dt, b.vx+k3.dvx*dt, b.vy+k3.dvy*dt, b.vz+k3.dvz*dt, t+dt);
-                const nx = b.x + (dt/6)*(k1.dx + 2*k2.dx + 2*k3.dx + k4.dx); const ny = b.y + (dt/6)*(k1.dy + 2*k2.dy + 2*k3.dy + k4.dy); const nz = b.z + (dt/6)*(k1.dz + 2*k2.dz + 2*k3.dz + k4.dz);
-                const nvx = b.vx + (dt/6)*(k1.dvx + 2*k2.dvx + 2*k3.dvx + k4.dvx); const nvy = b.vy + (dt/6)*(k1.dvy + 2*k2.dvy + 2*k3.dvy + k4.dvy); const nvz = b.vz + (dt/6)*(k1.dvz + 2*k2.dvz + 2*k3.dvz + k4.dvz);
-                const acc = calc(nx, ny, nz, nvx, nvy, nvz, t+dt); const newBody = { x: nx, y: ny, z: nz, vx: nvx, vy: nvy, vz: nvz, ax: acc.fx, ay: acc.fy, az: acc.fz }; bodiesRef.current = [newBody]; timeRef.current += dt; historyRef.current.push(newBody); if (historyRef.current.length > 1500) historyRef.current.shift();
-            } catch (err) { setPlaying(false); } frameId = requestAnimationFrame(loop); }; if(playing) loop(); return () => cancelAnimationFrame(frameId); }, [playing, mode, dt]);
-    useEffect(() => { const id = setInterval(() => { if(playing && historyRef.current.length > 0) { const last = historyRef.current[historyRef.current.length-1]; setDisplayData(prev => { const nu = [...prev, { t: timeRef.current, ...last }]; if(nu.length > 500) return nu.slice(-500); return nu; }); } }, 200); return () => clearInterval(id); }, [playing]);
-    
-    // UPDATED VISUALIZER WITH EXACT TOUCH CODE & PROJECTION
-    const Visualizer = () => { 
-        const canvasRef = useRef(null); 
-        const cam = useOrbitControls(canvasRef, mode === 'flow' ? 6 : 25);
-        
-        useEffect(() => { 
-            const cvs = canvasRef.current; 
-            const ctx = cvs.getContext('2d'); 
-            let anim; 
-            
-            const render = () => { 
-                const w = cvs.width = cvs.clientWidth; 
-                const h = cvs.height = cvs.clientHeight; 
-                const cx = w/2, cy = h/2; 
-                
-                ctx.fillStyle = '#020617'; 
-                ctx.fillRect(0, 0, w, h);
-                
-                const { yaw, pitch, zoom } = cam.current;
-
-                // EXACT PROJECT FUNCTION FROM SCREENTOUCH
-                const project = (x, y, z) => { 
-                    // Rotate Y (yaw)
-                    let x1 = x * Math.cos(yaw) - z * Math.sin(yaw);
-                    let z1 = z * Math.cos(yaw) + x * Math.sin(yaw);
-                    // Rotate X (pitch)
-                    let y2 = y * Math.cos(pitch) - z1 * Math.sin(pitch);
-                    let z2 = z1 * Math.cos(pitch) + y * Math.sin(pitch);
-                    // Perspective
-                    const scale = 500 / (500 - z2) * zoom;
-                    return { 
-                        x: cx + x1 * scale, 
-                        y: cy - y2 * scale, // Invert Y for typical physics coords
-                        s: scale,
-                        z: z2 
-                    }; 
-                };
-                
-                const hist = historyRef.current; 
-                if (hist.length > 1) { 
-                    ctx.beginPath(); 
-                    ctx.strokeStyle = mode === 'flow' ? '#f59e0b' : '#3b82f6'; 
-                    ctx.lineWidth = mode === 'flow' ? 1 : 2; 
-                    ctx.globalAlpha = 0.6; 
-                    for(let i=0; i<hist.length; i+=2) { 
-                        const p = project(hist[i].x, hist[i].y, hist[i].z); 
-                        if (i===0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); 
-                    } 
-                    ctx.stroke(); 
-                    ctx.globalAlpha = 1.0; 
-                }
-                
-                const b = bodiesRef.current[0]; 
-                const p = project(b.x, b.y, b.z); 
-                const rad = Math.max(2, 6 * (p.s/20)); // Adapted radius scaling
-                const col = mode === 'flow' ? '245, 158, 11' : '59, 130, 246'; 
-                const grad = ctx.createRadialGradient(p.x, p.y, rad*0.2, p.x, p.y, rad*3); 
-                grad.addColorStop(0, `rgba(${col}, 1)`); 
-                grad.addColorStop(1, `rgba(${col}, 0)`); 
-                ctx.fillStyle = grad; 
-                ctx.globalCompositeOperation = 'screen'; 
-                ctx.beginPath(); ctx.arc(p.x, p.y, rad*3, 0, 7); ctx.fill(); 
-                ctx.globalCompositeOperation = 'source-over'; 
-                ctx.fillStyle = '#fff'; 
-                ctx.beginPath(); ctx.arc(p.x, p.y, rad*0.5, 0, 7); ctx.fill(); 
-                
-                anim = requestAnimationFrame(render); 
-            }; 
-            render(); 
-            return () => cancelAnimationFrame(anim); 
-        }, [mode]); 
-        
-        return <canvas ref={canvasRef} className="w-full h-full block" />; 
-    };
-
-    return ( <div className={`flex flex-col h-[calc(100dvh-60px)] -m-4 relative ${fullScreen ? 'fixed inset-0 z-50 m-0 bg-slate-950' : ''}`}> <div className={`relative transition-all duration-500 bg-slate-900 overflow-hidden shadow-xl z-20 ${fullScreen ? 'absolute inset-0 h-full' : 'h-[35%] shrink-0'}`}> <Visualizer /> <div className="absolute top-4 right-4 flex items-center gap-3"> <button onClick={() => { bodiesRef.current = [{x:0.1,y:0,z:0,vx:0,vy:0,vz:0}]; timeRef.current=0; historyRef.current=[]; setDisplayData([]); }} className="p-2 rounded-full bg-slate-800/80 text-slate-400 hover:text-white backdrop-blur"><Icons.Close /></button> <button onClick={() => setPlaying(!playing)} className="p-2 rounded-full bg-blue-600/90 text-white shadow-lg backdrop-blur">{playing ? "||" : "▶"}</button> <button onClick={() => setFullScreen(!fullScreen)} className="p-2 rounded-full bg-slate-800/80 text-slate-400 hover:text-white backdrop-blur">⛶</button> </div> </div> {!fullScreen && ( <div className="flex-1 flex flex-col bg-slate-950 overflow-hidden"> <div className="flex border-b border-slate-800 shrink-0"> {['eq', 'table', 'graph'].map(id => (<button key={id} onClick={() => setTab(id)} className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-widest transition ${tab === id ? 'text-blue-400 bg-slate-900 border-b-2 border-blue-500' : 'text-slate-600 hover:text-slate-400'}`}>{id}</button>))} </div> <div className="flex-1 overflow-hidden relative"> {tab === 'eq' && ( <div className="h-full overflow-y-auto p-4 space-y-4 no-scrollbar"> <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">{Object.entries(PRESETS).map(([k, v]) => (<button key={k} onClick={() => loadPreset(k)} className="shrink-0 px-3 py-1 rounded border border-slate-700 text-[10px] font-bold text-slate-400 hover:bg-slate-800 hover:text-white transition">{v.name}</button>))}</div> <div className="grid gap-3"> <EqInput label="X Logic" sub={mode==='newtonian'?"x''=":"x'="} val={eqs.x} set={v=>setEqs({...eqs,x:v})} color="border-blue-500" /> <EqInput label="Y Logic" sub={mode==='newtonian'?"y''=":"y'="} val={eqs.y} set={v=>setEqs({...eqs,y:v})} color="border-purple-500" /> <EqInput label="Z Logic" sub={mode==='newtonian'?"z''=":"z'="} val={eqs.z} set={v=>setEqs({...eqs,z:v})} color="border-emerald-500" /> </div> </div> )} {tab === 'table' && ( <div className="h-full flex flex-col"> <div className="p-2 flex justify-between bg-slate-900 border-b border-slate-800"><span className="text-[10px] text-slate-500 pt-1">Live Data</span><button onClick={()=>{const doc=new jspdf.jsPDF();doc.autoTable({head:[['T','X','Y','V']],body:displayData.map(d=>[d.t.toFixed(3),d.x.toFixed(4),d.y.toFixed(4),d.vx.toFixed(4)])});doc.save('ode_data.pdf')}} className="bg-slate-800 text-white text-[10px] px-3 py-1 rounded border border-slate-700">PDF</button></div> <div className="flex-1 overflow-auto scroller"><table className="data-table"><thead><tr><th>T</th><th>X</th><th>Y</th><th>Vx</th></tr></thead><tbody>{displayData.slice().reverse().map((r, i) => (<tr key={i}><td className="text-blue-400">{r.t.toFixed(3)}</td><td>{r.x.toFixed(4)}</td><td>{r.y.toFixed(4)}</td><td>{r.vx.toFixed(4)}</td></tr>))}</tbody></table></div> </div> )} {tab === 'graph' && (<div className="h-full overflow-y-auto p-4 space-y-4 no-scrollbar"><div className="grid grid-cols-2 gap-3"><GraphCard title="X vs Y" data={displayData} x="x" y="y" col="#3b82f6" /><GraphCard title="X vs T" data={displayData} x="t" y="x" col="#10b981" /></div></div>)} </div> </div> )} </div> );
-};
-
-// --- 2. EMSOLVER (ELECTROMAGNETISM) ---
-const EMSolver = () => {
-    const PRESETS = { cyclotron: { name: "Cyclotron", Ex: "0", Ey: "0", Ez: "0", Bx: "0", By: "0", Bz: "1", q: 1, m: 1 }, drift: { name: "E x B Drift", Ex: "0", Ey: "1", Ez: "0", Bx: "0", By: "0", Bz: "1", q: 1, m: 1 }, wave: { name: "EM Wave", Ex: "cos(t-z)", Ey: "0", Ez: "0", Bx: "0", By: "cos(t-z)", Bz: "0", q: 1, m: 1 } };
-    const [fullScreen, setFullScreen] = useState(false); const [tab, setTab] = useState('fields'); const [playing, setPlaying] = useState(true); const [fields, setFields] = useState(PRESETS.cyclotron); const [dt, setDt] = useState(0.02);
-    const historyRef = useRef([]); const [displayData, setDisplayData] = useState([]); const bodiesRef = useRef([{ x: 0, y: 0, z: 0, vx: 2, vy: 0, vz: 0, Ex:0, Ey:0, Ez:0, Bx:0, By:0, Bz:0, Fx:0, Fy:0, Fz:0 }]); const timeRef = useRef(0); const fieldFuncRef = useRef(null); 
-    useEffect(() => { try { fieldFuncRef.current = new Function('x','y','z','t', `return { Ex: ${parseEq(fields.Ex)}, Ey: ${parseEq(fields.Ey)}, Ez: ${parseEq(fields.Ez)}, Bx: ${parseEq(fields.Bx)}, By: ${parseEq(fields.By)}, Bz: ${parseEq(fields.Bz)} };`); } catch(e) { } }, [fields]);
-    const loadPreset = (key) => { const p = PRESETS[key]; setFields(p); bodiesRef.current = [{ x:0,y:0,z:0,vx:2,vy:0,vz:0,Ex:0,Ey:0,Ez:0,Bx:0,By:0,Bz:0,Fx:0,Fy:0,Fz:0 }]; timeRef.current = 0; historyRef.current = []; setDisplayData([]); };
-    useEffect(() => { let frameId; const loop = () => { if (!playing || !fieldFuncRef.current) return; const b = bodiesRef.current[0]; const t = timeRef.current; const calc = fieldFuncRef.current; const {q,m} = fields;
-            const getAccel = (x, y, z, vx, vy, vz, t) => { const f = calc(x, y, z, t); return { ax: (q/m)*(f.Ex+vy*f.Bz-vz*f.By), ay: (q/m)*(f.Ey+vz*f.Bx-vx*f.Bz), az: (q/m)*(f.Ez+vx*f.By-vy*f.Bx), f }; };
-            const k1 = getAccel(b.x, b.y, b.z, b.vx, b.vy, b.vz, t); const k2 = getAccel(b.x+b.vx*0.5*dt, b.y+b.vy*0.5*dt, b.z+b.vz*0.5*dt, b.vx+k1.ax*0.5*dt, b.vy+k1.ay*0.5*dt, b.vz+k1.az*0.5*dt, t+0.5*dt); const k3 = getAccel(b.x+b.vx*0.5*dt, b.y+b.vy*0.5*dt, b.z+b.vz*0.5*dt, b.vx+k2.ax*0.5*dt, b.vy+k2.ay*0.5*dt, b.vz+k2.az*0.5*dt, t+0.5*dt); const k4 = getAccel(b.x+b.vx*dt, b.y+b.vy*dt, b.z+b.vz*dt, b.vx+k3.ax*dt, b.vy+k3.ay*dt, b.vz+k3.az*dt, t+dt);
-            const nx = b.x + (dt/6)*(b.vx + 2*(b.vx+k1.ax*0.5*dt) + 2*(b.vx+k2.ax*0.5*dt) + (b.vx+k3.ax*dt)); const nvx = b.vx + (dt/6)*(k1.ax + 2*k2.ax + 2*k3.ax + k4.ax); const nvy = b.vy + (dt/6)*(k1.ay + 2*k2.ay + 2*k3.ay + k4.ay); const nvz = b.vz + (dt/6)*(k1.az + 2*k2.az + 2*k3.az + k4.az); const ny = b.y + b.vy*dt; const nz = b.z + b.vz*dt;
-            const f = calc(nx, ny, nz, t+dt); const newBody = { x:nx, y:ny, z:nz, vx:nvx, vy:nvy, vz:nvz, ...f, Fx:k4.ax*m, Fy:k4.ay*m, Fz:k4.az*m }; bodiesRef.current = [newBody]; timeRef.current += dt; historyRef.current.push(newBody); if (historyRef.current.length > 1500) historyRef.current.shift(); frameId = requestAnimationFrame(loop); }; if(playing) loop(); return () => cancelAnimationFrame(frameId); }, [playing, fields, dt]);
-    useEffect(() => { const id = setInterval(() => { if(playing && historyRef.current.length > 0) { const last = historyRef.current[historyRef.current.length-1]; setDisplayData(prev => { const nu = [...prev, { t: timeRef.current, ...last }]; if(nu.length > 500) return nu.slice(-500); return nu; }); } }, 200); return () => clearInterval(id); }, [playing]);
-    
-    // UPDATED VISUALIZER WITH EXACT TOUCH CODE & PROJECTION
-    const Visualizer = () => { 
-        const canvasRef = useRef(null); 
-        const cam = useOrbitControls(canvasRef, 25);
-        
-        useEffect(() => { 
-            const cvs = canvasRef.current; 
-            const ctx = cvs.getContext('2d'); 
-            let anim; 
-            
-            const render = () => { 
-                const w = cvs.width = cvs.clientWidth; 
-                const h = cvs.height = cvs.clientHeight; 
-                const cx = w/2, cy = h/2; 
-                
-                ctx.fillStyle = '#020617'; 
-                ctx.fillRect(0, 0, w, h);
-                
-                const { yaw, pitch, zoom } = cam.current;
-
-                // EXACT PROJECT FUNCTION FROM SCREENTOUCH
-                const project = (x, y, z) => { 
-                    // Rotate Y (yaw)
-                    let x1 = x * Math.cos(yaw) - z * Math.sin(yaw);
-                    let z1 = z * Math.cos(yaw) + x * Math.sin(yaw);
-                    // Rotate X (pitch)
-                    let y2 = y * Math.cos(pitch) - z1 * Math.sin(pitch);
-                    let z2 = z1 * Math.cos(pitch) + y * Math.sin(pitch);
-                    // Perspective
-                    const scale = 500 / (500 - z2) * zoom;
-                    return { 
-                        x: cx + x1 * scale, 
-                        y: cy - y2 * scale, // Invert Y for typical physics coords
-                        s: scale,
-                        z: z2 
-                    }; 
-                };
-                
-                const hist = historyRef.current; 
-                if (hist.length > 1) { 
-                    ctx.beginPath(); 
-                    ctx.strokeStyle = '#a855f7'; 
-                    ctx.lineWidth = 2; 
-                    ctx.globalAlpha = 0.6; 
-                    for(let i=0; i<hist.length; i+=2) { 
-                        const p = project(hist[i].x, hist[i].y, hist[i].z); 
-                        if (i===0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); 
-                    } 
-                    ctx.stroke(); 
-                    ctx.globalAlpha = 1.0; 
-                }
-                
-                const b = bodiesRef.current[0]; 
-                const p = project(b.x, b.y, b.z); 
-                const rad = Math.max(2, 6 * (p.s/20)); 
-                ctx.fillStyle = '#fff'; 
-                ctx.beginPath(); ctx.arc(p.x, p.y, rad, 0, 7); ctx.fill();
-                
-                const dv = (vx,vy,vz,c) => { 
-                    const e = project(b.x+vx*0.5, b.y+vy*0.5, b.z+vz*0.5); 
-                    ctx.beginPath(); ctx.strokeStyle = c; ctx.lineWidth = 2; 
-                    ctx.moveTo(p.x, p.y); ctx.lineTo(e.x, e.y); ctx.stroke(); 
-                }; 
-                dv(b.Ex,b.Ey,b.Ez,'#fbbf24'); 
-                dv(b.Bx,b.By,b.Bz,'#22d3ee'); 
-                dv(b.Fx,b.Fy,b.Fz,'#ef4444'); 
-                
-                anim = requestAnimationFrame(render); 
-            }; 
-            render(); 
-            return () => cancelAnimationFrame(anim); 
-        }, []); 
-        
-        return <canvas ref={canvasRef} className="w-full h-full block" />; 
-    };
-
-    return ( <div className={`flex flex-col h-[calc(100dvh-60px)] -m-4 relative ${fullScreen ? 'fixed inset-0 z-50 m-0 bg-slate-950' : ''}`}> <div className={`relative transition-all duration-500 bg-slate-900 overflow-hidden shadow-xl z-20 ${fullScreen ? 'absolute inset-0 h-full' : 'h-[35%] shrink-0'}`}> <Visualizer /> <div className="absolute top-4 right-4 flex items-center gap-3"> <button onClick={() => { bodiesRef.current=[{x:0,y:0,z:0,vx:2,vy:0,vz:0,Ex:0,Ey:0,Ez:0,Bx:0,By:0,Bz:0,Fx:0,Fy:0,Fz:0}]; timeRef.current=0; historyRef.current=[]; setDisplayData([]); }} className="p-2 rounded-full bg-slate-800/80 text-slate-400 hover:text-white backdrop-blur"><Icons.Close /></button> <button onClick={() => setPlaying(!playing)} className="p-2 rounded-full bg-blue-600/90 text-white shadow-lg backdrop-blur">{playing ? "||" : "▶"}</button> <button onClick={() => setFullScreen(!fullScreen)} className="p-2 rounded-full bg-slate-800/80 text-slate-400 hover:text-white backdrop-blur">⛶</button> </div> <div className="absolute bottom-4 left-4 text-[10px] font-mono text-slate-400"> <span className="text-yellow-400">E-Field</span> | <span className="text-cyan-400">B-Field</span> | <span className="text-red-400">Force</span> </div> </div> {!fullScreen && ( <div className="flex-1 flex flex-col bg-slate-950 overflow-hidden"> <div className="flex border-b border-slate-800 shrink-0"> {['fields', 'table', 'graph'].map(id => (<button key={id} onClick={() => setTab(id)} className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-widest transition ${tab === id ? 'text-blue-400 bg-slate-900 border-b-2 border-blue-500' : 'text-slate-600 hover:text-slate-400'}`}>{id}</button>))} </div> <div className="flex-1 overflow-hidden relative"> {tab === 'fields' && ( <div className="h-full overflow-y-auto p-4 space-y-4 no-scrollbar"> 
-    {/* ADDED EQUATION CARD HERE AS REQUESTED */}
-    <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800 mb-4">
-        <div className="text-[10px] font-bold text-slate-500 uppercase mb-2">MAXWELL-LORENTZ DYNAMICS</div>
-        <div className="font-mono text-white text-sm">d²r/dt² = (q/m)(E + v × B)</div>
+const OverlayControls = ({ playing, setPlaying, fullScreen, setFullScreen, reset }) => (
+    <div className="absolute top-4 right-4 flex items-center gap-2">
+        <button onClick={reset} className="p-2 bg-slate-800/80 text-white rounded-full hover:bg-slate-700 backdrop-blur"><Icons.Reset/></button>
+        <button onClick={()=>setPlaying(!playing)} className="p-2 bg-blue-600/90 text-white rounded-full shadow-lg hover:bg-blue-500 backdrop-blur">
+            {playing ? <Icons.Pause/> : <Icons.Play/>}
+        </button>
+        <button onClick={()=>setFullScreen(!fullScreen)} className="p-2 bg-slate-800/80 text-white rounded-full hover:bg-slate-700 backdrop-blur"><Icons.Full/></button>
     </div>
-    
-    <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">{Object.entries(PRESETS).map(([k, v]) => (<button key={k} onClick={() => loadPreset(k)} className="shrink-0 px-3 py-1 rounded border border-slate-700 text-[10px] font-bold text-slate-400 hover:bg-slate-800 hover:text-white transition">{v.name}</button>))}</div> <div className="grid grid-cols-2 gap-3"> <div className="space-y-2"><div className="text-[10px] font-bold text-yellow-500">Electric (E)</div><EqInput label="Ex" val={fields.Ex} set={v=>setFields({...fields,Ex:v})} color="border-yellow-500"/><EqInput label="Ey" val={fields.Ey} set={v=>setFields({...fields,Ey:v})} color="border-yellow-500"/><EqInput label="Ez" val={fields.Ez} set={v=>setFields({...fields,Ez:v})} color="border-yellow-500"/></div> <div className="space-y-2"><div className="text-[10px] font-bold text-cyan-500">Magnetic (B)</div><EqInput label="Bx" val={fields.Bx} set={v=>setFields({...fields,Bx:v})} color="border-cyan-500"/><EqInput label="By" val={fields.By} set={v=>setFields({...fields,By:v})} color="border-cyan-500"/><EqInput label="Bz" val={fields.Bz} set={v=>setFields({...fields,Bz:v})} color="border-cyan-500"/></div> </div> </div> )} {tab === 'table' && ( <div className="h-full flex flex-col"> <div className="p-2 flex justify-between bg-slate-900 border-b border-slate-800"><span className="text-[10px] text-slate-500 pt-1">Real-time Data</span><button onClick={()=>{const doc=new jspdf.jsPDF();doc.autoTable({head:[['T','X','Y','Vx','Vy']],body:displayData.map(d=>[d.t.toFixed(3),d.x.toFixed(4),d.y.toFixed(4),d.vx.toFixed(4),d.vy.toFixed(4)])});doc.save('em_data.pdf')}} className="bg-slate-800 text-white text-[10px] px-3 py-1 rounded border border-slate-700">PDF</button></div> <div className="flex-1 overflow-auto scroller"><table className="data-table"><thead><tr><th>T</th><th>X</th><th>Y</th><th>Vx</th><th>Vy</th></tr></thead><tbody>{displayData.slice().reverse().map((r, i) => (<tr key={i}><td className="text-blue-400">{r.t.toFixed(3)}</td><td>{r.x.toFixed(4)}</td><td>{r.y.toFixed(4)}</td><td>{r.vx.toFixed(3)}</td><td>{r.vy.toFixed(3)}</td></tr>))}</tbody></table></div> </div> )} {tab === 'graph' && (<div className="h-full overflow-y-auto p-4 space-y-4 no-scrollbar"><div className="grid grid-cols-2 gap-3"><GraphCard title="Pos X-Y" data={displayData} x="x" y="y" col="#fbbf24" /><GraphCard title="Phase Vx-Vy" data={displayData} x="vx" y="vy" col="#22d3ee" /></div></div>)} </div> </div> )} </div> );
-};
+);
 
-// --- 3. THERMOSOLVER (STAT MECH) ---
-const ThermoSolver = () => {
-    const PRESETS = {
-        zero: { name: "Zeroth Law (Mixing)", force: "0", setup: "mixing" },
-        first: { name: "First Law (Work)", force: "0", setup: "work" },
-        second: { name: "Second Law (Entropy)", force: "0", setup: "entropy" },
-        real: { name: "Real Gas (VDW)", force: "4*((1/r)**12 - (1/r)**6)", setup: "mixing" }
-    };
-    const [fullScreen, setFullScreen] = useState(false); const [tab, setTab] = useState('lab'); const [playing, setPlaying] = useState(true);
-    const [config, setConfig] = useState({ N: 80, force: "0", heat: 0.5, volume: 1.0 });
-    const bodiesRef = useRef([]); const statsRef = useRef({ P:0, T:0, V:0, S:0, U:0 }); const timeRef = useRef(0);
-    const [displayData, setDisplayData] = useState([]);
-    
-    // Init Particles
-    const init = (mode) => {
-        let arr = []; const N = config.N;
-        for(let i=0; i<N; i++) {
-            let x, y, vx, vy, color;
-            if(mode === 'mixing') {
-                if(i < N/2) { x = Math.random()*40+5; y = Math.random()*40+5; vx = (Math.random()-0.5)*4; vy = (Math.random()-0.5)*4; color = '#ef4444'; } 
-                else { x = Math.random()*40+55; y = Math.random()*40+5; vx = (Math.random()-0.5)*1; vy = (Math.random()-0.5)*1; color = '#3b82f6'; }
-            } else if (mode === 'work') {
-                x = Math.random()*90+5; y = Math.random()*40+5; vx = (Math.random()-0.5)*3; vy = (Math.random()-0.5)*3; color = '#fbbf24';
-            } else { // entropy
-                x = Math.random()*20+5; y = Math.random()*20+5; vx = (Math.random()-0.5)*5; vy = (Math.random()-0.5)*5; color = '#10b981';
-            }
-            arr.push({ x, y, vx, vy, color });
-        }
-        bodiesRef.current = arr; timeRef.current = 0; setDisplayData([]);
-    };
-    useEffect(() => init(PRESETS.zero.setup), []);
 
-    // Physics Loop
+// --- 1. ODESOLVER (Replaced with OrbitLab code from Screentouch) ---
+const ODESolver = () => {
+    const [fullScreen, setFullScreen] = useState(false);
+    const [eqs, setEqs] = useState({ x:"-5*x", y:"-5*y", z:"-5*z" }); 
+    const [bodies, setBodies] = useState([{x:2, y:0, z:0, vx:0, vy:2, vz:0.5, trail:[]}]);
+    const [playing, setPlaying] = useState(true);
+    
+    // Physics Loop (Exact copy)
     useEffect(() => {
-        let frame;
-        const loop = () => {
-            if(!playing) return;
-            const dt = 0.1; const boxW = 100 * config.volume; const boxH = 50;
-            let P_impulse = 0; let KE = 0;
-            
-            // Update Pos & Wall Collisions
-            bodiesRef.current.forEach(b => {
-                b.x += b.vx * dt; b.y += b.vy * dt;
-                // Thermostat (Heat Control)
-                if(Math.random() < 0.05) { b.vx += (Math.random()-0.5)*config.heat; b.vy += (Math.random()-0.5)*config.heat; }
-                
-                if(b.x < 0) { b.x = 0; b.vx *= -1; P_impulse += Math.abs(b.vx); }
-                if(b.x > boxW) { b.x = boxW; b.vx *= -1; P_impulse += Math.abs(b.vx); }
-                if(b.y < 0) { b.y = 0; b.vy *= -1; P_impulse += Math.abs(b.vy); }
-                if(b.y > boxH) { b.y = boxH; b.vy *= -1; P_impulse += Math.abs(b.vy); }
-                
-                KE += 0.5 * (b.vx**2 + b.vy**2);
-                
-                // Color by speed
-                const speed = Math.sqrt(b.vx**2 + b.vy**2);
-                b.color = speed > 3 ? '#ef4444' : speed > 1.5 ? '#fbbf24' : '#3b82f6';
-            });
+        if(!playing) return;
+        const dt = 0.02;
+        let updateFunc;
+        try {
+            updateFunc = new Function('x','y','z','t', `return { ax: ${parseMath(eqs.x)}, ay: ${parseMath(eqs.y)}, az: ${parseMath(eqs.z)} }`);
+        } catch(e) { return; }
 
-            // Inter-particle Collisions (Simple Elastic)
-            for(let i=0; i<bodiesRef.current.length; i++) {
-                for(let j=i+1; j<bodiesRef.current.length; j++) {
-                    const b1 = bodiesRef.current[i]; const b2 = bodiesRef.current[j];
-                    const dx = b2.x - b1.x; const dy = b2.y - b1.y;
-                    const distSq = dx*dx + dy*dy;
-                    if(distSq < 4) { // Collision Radius approx
-                        const angle = Math.atan2(dy, dx);
-                        const sin = Math.sin(angle), cos = Math.cos(angle);
-                        const v1 = { x: 0, y: 0 }, v2 = { x: 0, y: 0 };
-                        v1.x = b1.vx * cos + b1.vy * sin; v1.y = b1.vy * cos - b1.vx * sin;
-                        v2.x = b2.vx * cos + b2.vy * sin; v2.y = b2.vy * cos - b2.vx * sin;
-                        const v1xF = v2.x; const v2xF = v1.x; // Swap
-                        b1.vx = v1xF * cos - v1.y * sin; b1.vy = v1.y * cos + v1xF * sin;
-                        b2.vx = v2xF * cos - v2.y * sin; b2.vy = v2.y * cos + v2xF * sin;
-                        // Separate to prevent stick
-                        const overlap = 2 - Math.sqrt(distSq);
-                        b1.x -= overlap * cos; b1.y -= overlap * sin;
-                        b2.x += overlap * cos; b2.y += overlap * sin;
-                    }
+        const id = setInterval(() => {
+            setBodies(prev => prev.map(b => {
+                const acc = updateFunc(b.x, b.y, b.z, 0);
+                const vx = b.vx + acc.ax * dt;
+                const vy = b.vy + acc.ay * dt;
+                const vz = b.vz + acc.az * dt;
+                const x = b.x + vx * dt;
+                const y = b.y + vy * dt;
+                const z = b.z + vz * dt;
+                
+                const trail = [...b.trail, {x,y,z}];
+                if(trail.length > 100) trail.shift();
+                
+                return { ...b, x, y, z, vx, vy, vz, trail };
+            }));
+        }, 16);
+        return () => clearInterval(id);
+    }, [playing, eqs]);
+
+    // Draw (Exact copy)
+    const draw = (ctx, project) => {
+        bodies.forEach(b => {
+            if(b.trail.length > 1) {
+                ctx.beginPath();
+                ctx.strokeStyle = '#3b82f6';
+                ctx.lineWidth = 2;
+                for(let i=0; i<b.trail.length; i++) {
+                    const p = project(b.trail[i].x, b.trail[i].y, b.trail[i].z);
+                    if(i===0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
                 }
+                ctx.stroke();
             }
-
-            // Stats
-            timeRef.current += dt;
-            statsRef.current.P = P_impulse / (2*(boxW+boxH)*dt); // P = F/A approx
-            statsRef.current.T = KE / bodiesRef.current.length;
-            statsRef.current.V = boxW * boxH;
-            statsRef.current.U = KE;
-            // Entropy (Grid approximation)
-            let grid = new Array(10).fill(0);
-            bodiesRef.current.forEach(b => grid[Math.floor((b.x/boxW)*10)||0]++);
-            let S = 0; grid.forEach(n => { if(n>0) { let p = n/config.N; S -= p*Math.log(p); } });
-            statsRef.current.S = S + 2; // Normalize
-
-            frame = requestAnimationFrame(loop);
-        };
-        if(playing) loop(); return () => cancelAnimationFrame(frame);
-    }, [playing, config]);
-
-    useEffect(() => { const id = setInterval(() => { if(playing) { const s = statsRef.current; setDisplayData(p => { const n = [...p, { t: timeRef.current, ...s }]; return n.length > 500 ? n.slice(-500) : n; }); } }, 200); return () => clearInterval(id); }, [playing]);
-
-    const Visualizer = () => {
-        const canvasRef = useRef(null);
-        useEffect(() => {
-            const cvs = canvasRef.current; const ctx = cvs.getContext('2d'); let anim;
-            const render = () => {
-                const w = cvs.width = cvs.clientWidth; const h = cvs.height = cvs.clientHeight;
-                ctx.fillStyle = '#0f172a'; ctx.fillRect(0,0,w,h);
-                // Draw Box
-                const bx = 10, by = 10; const bw = (w-20)*config.volume; const bh = h-20;
-                ctx.strokeStyle = '#475569'; ctx.lineWidth = 2; ctx.strokeRect(bx, by, bw, bh);
-                
-                // Draw Particles
-                bodiesRef.current.forEach(b => {
-                    // Map physics coord to canvas
-                    const px = bx + (b.x / (100*config.volume)) * bw;
-                    const py = by + (b.y / 50) * bh;
-                    ctx.beginPath(); ctx.arc(px, py, 4, 0, 7);
-                    ctx.fillStyle = b.color; ctx.fill();
-                });
-                anim = requestAnimationFrame(render);
-            };
-            render(); return () => cancelAnimationFrame(anim);
-        }, [config]);
-        return <canvas ref={canvasRef} className="w-full h-full block" />;
+            const p = project(b.x, b.y, b.z);
+            ctx.fillStyle = '#fff';
+            ctx.beginPath(); ctx.arc(p.x, p.y, 6 * (p.s/20), 0, 7); ctx.fill();
+        });
     };
 
     return (
         <div className={`flex flex-col h-[calc(100dvh-60px)] -m-4 relative ${fullScreen ? 'fixed inset-0 z-50 m-0 bg-slate-950' : ''}`}>
-            <div className={`relative transition-all duration-500 bg-slate-900 overflow-hidden shadow-xl z-20 ${fullScreen ? 'absolute inset-0 h-full' : 'h-[35%] shrink-0'}`}>
-                <Visualizer />
-                <div className="absolute top-4 right-4 flex items-center gap-3">
-                    <button onClick={() => init('mixing')} className="p-2 rounded-full bg-slate-800/80 text-slate-400 hover:text-white backdrop-blur"><Icons.Close /></button>
-                    <button onClick={() => setPlaying(!playing)} className="p-2 rounded-full bg-blue-600/90 text-white shadow-lg backdrop-blur">{playing ? "||" : "▶"}</button>
-                    <button onClick={() => setFullScreen(!fullScreen)} className="p-2 rounded-full bg-slate-800/80 text-slate-400 hover:text-white backdrop-blur">⛶</button>
+             <div className={`${fullScreen ? 'h-full' : 'h-[40vh]'} relative shrink-0`}>
+                <SimCanvas draw={draw} />
+                <OverlayControls playing={playing} setPlaying={setPlaying} fullScreen={fullScreen} setFullScreen={setFullScreen} reset={()=>{setBodies([{x:2,y:0,z:0,vx:0,vy:2,vz:0.5,trail:[]}])}} />
+            </div>
+            {!fullScreen && (
+                <div className="flex-1 bg-slate-950 p-4 overflow-y-auto border-t border-slate-800 space-y-4">
+                    <h3 className="text-xs font-bold text-blue-400 uppercase">Acceleration Equations</h3>
+                    <div className="space-y-2">
+                        <InputRow label="ax =" val={eqs.x} set={v=>setEqs({...eqs, x:v})} />
+                        <InputRow label="ay =" val={eqs.y} set={v=>setEqs({...eqs, y:v})} />
+                        <InputRow label="az =" val={eqs.z} set={v=>setEqs({...eqs, z:v})} />
+                    </div>
+                    <div className="text-[10px] text-slate-500">Try: -10*x / (x^2+y^2+z^2)^1.5 (Gravity)</div>
                 </div>
-                <div className="absolute bottom-4 left-4 text-[10px] font-mono text-slate-400 flex gap-4">
-                    <span>P: {statsRef.current.P.toFixed(2)}</span><span>T: {statsRef.current.T.toFixed(2)}</span><span>S: {statsRef.current.S.toFixed(2)}</span>
+            )}
+        </div>
+    );
+};
+
+// --- 2. EMSOLVER (Replaced with EMLab code from Screentouch) ---
+const EMSolver = () => {
+    const [fullScreen, setFullScreen] = useState(false);
+    const [fields, setFields] = useState({ Ex: "0", Ey: "0", Ez: "0", Bx: "0", By: "0", Bz: "2" }); 
+    const [body, setBody] = useState({x:0, y:0, z:0, vx:2, vy:0, vz:0.5, trail:[]});
+    const [playing, setPlaying] = useState(true);
+    const tRef = useRef(0);
+
+    // Physics (Exact copy)
+    useEffect(() => {
+        if(!playing) return;
+        const dt = 0.02;
+        let calcFields;
+        try {
+            const code = `return { 
+                Ex: ${parseMath(fields.Ex)}, Ey: ${parseMath(fields.Ey)}, Ez: ${parseMath(fields.Ez)},
+                Bx: ${parseMath(fields.Bx)}, By: ${parseMath(fields.By)}, Bz: ${parseMath(fields.Bz)}
+            }`;
+            calcFields = new Function('x','y','z','t', code);
+        } catch(e) { return; }
+
+        const id = setInterval(() => {
+            tRef.current += dt;
+            setBody(b => {
+                const f = calcFields(b.x, b.y, b.z, tRef.current);
+                const ax = f.Ex + (b.vy * f.Bz - b.vz * f.By);
+                const ay = f.Ey + (b.vz * f.Bx - b.vx * f.Bz);
+                const az = f.Ez + (b.vx * f.By - b.vy * f.Bx);
+
+                const vx = b.vx + ax * dt;
+                const vy = b.vy + ay * dt;
+                const vz = b.vz + az * dt;
+                
+                const trail = [...b.trail, {x:b.x, y:b.y, z:b.z}];
+                if(trail.length > 150) trail.shift();
+
+                return { 
+                    x: b.x+vx*dt, y: b.y+vy*dt, z: b.z+vz*dt, 
+                    vx, vy, vz, trail, 
+                    Ex: f.Ex, Ey: f.Ey, Ez: f.Ez, Bx: f.Bx, By: f.By, Bz: f.Bz 
+                };
+            });
+        }, 16);
+        return () => clearInterval(id);
+    }, [playing, fields]);
+
+    const draw = (ctx, project) => {
+        if(body.trail.length > 1) {
+            ctx.beginPath(); ctx.strokeStyle = '#8b5cf6'; ctx.lineWidth = 2;
+            for(let i=0; i<body.trail.length; i+=2) {
+                const p = project(body.trail[i].x, body.trail[i].y, body.trail[i].z);
+                if(i===0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+            }
+            ctx.stroke();
+        }
+        const p = project(body.x, body.y, body.z);
+        ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(p.x, p.y, 6, 0, 7); ctx.fill();
+
+        const drawVec = (vx, vy, vz, col, scale=1) => {
+            const end = project(body.x + vx*scale, body.y + vy*scale, body.z + vz*scale);
+            ctx.beginPath(); ctx.strokeStyle = col; ctx.lineWidth = 2;
+            ctx.moveTo(p.x, p.y); ctx.lineTo(end.x, end.y); ctx.stroke();
+            ctx.fillStyle = col; ctx.beginPath(); ctx.arc(end.x, end.y, 3, 0, 7); ctx.fill();
+        };
+        if(body.Ex!=null) {
+            drawVec(body.Ex, body.Ey, body.Ez, '#fbbf24', 1); // E
+            drawVec(body.Bx, body.By, body.Bz, '#22d3ee', 1); // B
+        }
+    };
+
+    return (
+        <div className={`flex flex-col h-[calc(100dvh-60px)] -m-4 relative ${fullScreen ? 'fixed inset-0 z-50 m-0 bg-slate-950' : ''}`}>
+             <div className={`${fullScreen ? 'h-full' : 'h-[45vh]'} relative shrink-0`}>
+                <SimCanvas draw={draw} initZoom={25} />
+                <OverlayControls playing={playing} setPlaying={setPlaying} fullScreen={fullScreen} setFullScreen={setFullScreen} reset={()=>{setBody({x:0,y:0,z:0,vx:2,vy:0,vz:0.5,trail:[]}); tRef.current=0;}} />
+                <div className="absolute bottom-4 left-4 text-[10px] font-mono bg-black/60 p-2 rounded text-white backdrop-blur">
+                    <span className="text-yellow-400">Electric (E)</span> | <span className="text-cyan-400">Magnetic (B)</span>
                 </div>
             </div>
             {!fullScreen && (
-                <div className="flex-1 flex flex-col bg-slate-950 overflow-hidden">
-                    <div className="flex border-b border-slate-800 shrink-0">
-                        {['lab', 'table', 'graph'].map(id => (<button key={id} onClick={() => setTab(id)} className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-widest transition ${tab === id ? 'text-blue-400 bg-slate-900 border-b-2 border-blue-500' : 'text-slate-600 hover:text-slate-400'}`}>{id}</button>))}
+                <div className="flex-1 bg-slate-900 p-4 overflow-y-auto border-t border-slate-800">
+                    {/* ADDED EQUATION CARD AS REQUESTED */}
+                    <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700 mb-4">
+                        <div className="text-[10px] font-bold text-slate-500 uppercase mb-2">MAXWELL-LORENTZ DYNAMICS</div>
+                        <div className="font-mono text-white text-sm">d²r/dt² = (q/m)(E + v × B)</div>
                     </div>
-                    <div className="flex-1 overflow-hidden relative">
-                        {tab === 'lab' && (
-                            <div className="h-full overflow-y-auto p-4 space-y-4 no-scrollbar">
-                                <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">{Object.entries(PRESETS).map(([k, v]) => (<button key={k} onClick={() => { setConfig({...config, force:v.force}); init(v.setup); }} className="shrink-0 px-3 py-1 rounded border border-slate-700 text-[10px] font-bold text-slate-400 hover:bg-slate-800 hover:text-white transition">{v.name}</button>))}</div>
-                                <div className="grid gap-4">
-                                    <div className="space-y-2"><div className="text-[10px] font-bold text-orange-500 uppercase">Process Control</div>
-                                        <div className="glass-panel p-3 rounded flex flex-col gap-2">
-                                            <div className="flex justify-between text-xs text-slate-400"><span>Heat Injection (T)</span><span>{config.heat}</span></div>
-                                            <input type="range" min="0" max="2" step="0.1" value={config.heat} onChange={e=>setConfig({...config, heat:parseFloat(e.target.value)})} className="w-full h-1 bg-orange-900 rounded appearance-none accent-orange-500" />
-                                            <div className="flex justify-between text-xs text-slate-400 mt-2"><span>Volume (V)</span><span>{config.volume}</span></div>
-                                            <input type="range" min="0.3" max="1" step="0.1" value={config.volume} onChange={e=>setConfig({...config, volume:parseFloat(e.target.value)})} className="w-full h-1 bg-blue-900 rounded appearance-none accent-blue-500" />
-                                        </div>
-                                    </div>
-                                    <EqInput label="Interaction Potential F(r)" sub="Force =" val={config.force} set={v=>setConfig({...config, force:v})} color="border-emerald-500" />
-                                </div>
+
+                    <div className="grid grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <h4 className="text-[10px] font-bold text-yellow-500 mb-2 uppercase">Electric Field</h4>
+                            <div className="space-y-2">
+                                <InputRow label="Ex" val={fields.Ex} set={v=>setFields({...fields, Ex:v})} />
+                                <InputRow label="Ey" val={fields.Ey} set={v=>setFields({...fields, Ey:v})} />
+                                <InputRow label="Ez" val={fields.Ez} set={v=>setFields({...fields, Ez:v})} />
                             </div>
-                        )}
-                        {tab === 'table' && (
-                            <div className="h-full flex flex-col">
-                                <div className="p-2 flex justify-between bg-slate-900 border-b border-slate-800"><span className="text-[10px] text-slate-500 pt-1">Thermodynamic State</span><button onClick={()=>{const doc=new jspdf.jsPDF();doc.autoTable({head:[['Time','P','V','T','S']],body:displayData.map(d=>[d.t.toFixed(2),d.P.toFixed(2),d.V.toFixed(0),d.T.toFixed(2),d.S.toFixed(3)])});doc.save('thermo_data.pdf')}} className="bg-slate-800 text-white text-[10px] px-3 py-1 rounded border border-slate-700">PDF</button></div>
-                                <div className="flex-1 overflow-auto scroller"><table className="data-table"><thead><tr><th>t</th><th>P</th><th>V</th><th>T</th><th>S</th></tr></thead><tbody>{displayData.slice().reverse().map((r, i) => (<tr key={i}><td className="text-blue-400">{r.t.toFixed(1)}</td><td>{r.P.toFixed(2)}</td><td>{r.V.toFixed(0)}</td><td>{r.T.toFixed(2)}</td><td>{r.S.toFixed(2)}</td></tr>))}</tbody></table></div>
+                        </div>
+                        <div>
+                            <h4 className="text-[10px] font-bold text-cyan-500 mb-2 uppercase">Magnetic Field</h4>
+                            <div className="space-y-2">
+                                <InputRow label="Bx" val={fields.Bx} set={v=>setFields({...fields, Bx:v})} />
+                                <InputRow label="By" val={fields.By} set={v=>setFields({...fields, By:v})} />
+                                <InputRow label="Bz" val={fields.Bz} set={v=>setFields({...fields, Bz:v})} />
                             </div>
-                        )}
-                        {tab === 'graph' && (<div className="h-full overflow-y-auto p-4 space-y-4 no-scrollbar"><div className="grid grid-cols-2 gap-3"><GraphCard title="PV Diagram" data={displayData} x="V" y="P" col="#fbbf24" /><GraphCard title="Entropy vs Time" data={displayData} x="t" y="S" col="#10b981" /></div></div>)}
+                        </div>
+                    </div>
+                    <div className="text-[10px] text-slate-500">
+                        Presets: <button className="text-blue-400 hover:underline" onClick={()=>setFields({Ex:"0",Ey:"0",Ez:"0",Bx:"0",By:"0",Bz:"2"})}>Cyclotron</button>, 
+                        <button className="text-blue-400 hover:underline ml-2" onClick={()=>setFields({Ex:"0",Ey:"1",Ez:"0",Bx:"0",By:"0",Bz:"1"})}>Drift</button>,
+                        <button className="text-blue-400 hover:underline ml-2" onClick={()=>setFields({Ex:"cos(t-z)",Ey:"0",Ez:"0",Bx:"0",By:"cos(t-z)",Bz:"0"})}>EM Wave</button>
                     </div>
                 </div>
             )}
@@ -536,22 +375,160 @@ const ThermoSolver = () => {
     );
 };
 
-// --- SIM CANVAS (FALLBACK) ---
-const SimCanvas = ({ type }) => {
-    const canvasRef = useRef(null);
+// --- 3. THERMOSOLVER (Replaced with ThermoLab code from Screentouch - FULL 3D) ---
+const ThermoSolver = () => {
+    const [fullScreen, setFullScreen] = useState(false);
+    const [forceEq, setForceEq] = useState("0"); 
+    const [volume, setVolume] = useState(1.0);
+    const [particles, setParticles] = useState([]);
+    const [stats, setStats] = useState({P:0, T:0});
+    const [playing, setPlaying] = useState(true);
+
+    // Init (Exact copy 3D)
     useEffect(() => {
-        const canvas = canvasRef.current; const ctx = canvas.getContext('2d'); let t = 0; let id;
-        const render = () => { t++; const w = canvas.width = canvas.parentElement.clientWidth; const h = canvas.height = 240; ctx.fillStyle = '#1e293b'; ctx.fillRect(0,0,w,h); const cx = w/2, cy = h/2;
-            if(type === 'pendulum') { ctx.fillStyle = '#f8fafc'; ctx.fillRect(0,0,w,h); const ang = Math.sin(t*0.05) * Math.PI/4; const bx = cx + 120*Math.sin(ang); const by = 20 + 120*Math.cos(ang); ctx.beginPath(); ctx.moveTo(cx,20); ctx.lineTo(bx,by); ctx.strokeStyle='#475569'; ctx.stroke(); ctx.beginPath(); ctx.arc(bx, by, 12, 0, 7); ctx.fillStyle='#e11d48'; ctx.fill(); }
-            if(type === 'optics') { const lx = (t*10)%w; ctx.beginPath(); ctx.arc(lx, cy, 4, 0, 7); ctx.fillStyle='#facc15'; ctx.fill(); ctx.fillStyle='#fff'; ctx.fillText('Photon c', 10, cy-20); }
-            id = requestAnimationFrame(render);
-        }; render(); return () => cancelAnimationFrame(id);
-    }, [type]);
-    return <div className="rounded-xl overflow-hidden mt-4 shadow-inner"><canvas ref={canvasRef} className="block w-full h-[240px]"/></div>;
+        const arr = [];
+        for(let i=0; i<80; i++) {
+            arr.push({
+                x: Math.random()*30, y: Math.random()*30, z: Math.random()*30,
+                vx: (Math.random()-0.5)*4, vy: (Math.random()-0.5)*4, vz: (Math.random()-0.5)*4,
+                color: i<40 ? '#ef4444' : '#3b82f6'
+            });
+        }
+        setParticles(arr);
+    }, []);
+
+    // Physics (Exact copy 3D)
+    useEffect(() => {
+        if(!playing) return;
+        let forceFunc;
+        try { forceFunc = new Function('r', `return ${parseMath(forceEq)}`); } catch(e) { return; }
+
+        const id = setInterval(() => {
+            const dt = 0.1;
+            const boxW = 50 * volume; const boxH = 50; const boxD = 50;
+            let impulse = 0;
+            let ke = 0;
+
+            setParticles(prev => {
+                const next = prev.map(p => ({...p}));
+                if(forceEq !== "0") {
+                    for(let i=0; i<next.length; i++){
+                        for(let j=i+1; j<next.length; j++){
+                            const dx = next[j].x - next[i].x;
+                            const dy = next[j].y - next[i].y;
+                            const dz = next[j].z - next[i].z;
+                            const r2 = dx*dx + dy*dy + dz*dz;
+                            if(r2 < 64 && r2 > 0.1) {
+                                const r = Math.sqrt(r2);
+                                const f = forceFunc(r);
+                                const fx = f * dx/r; const fy = f * dy/r; const fz = f * dz/r;
+                                next[i].vx -= fx*dt; next[i].vy -= fy*dt; next[i].vz -= fz*dt;
+                                next[j].vx += fx*dt; next[j].vy += fy*dt; next[j].vz += fz*dt;
+                            }
+                        }
+                    }
+                }
+                next.forEach(p => {
+                    p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
+                    if(p.x < -boxW/2) { p.x = -boxW/2; p.vx *= -1; impulse += Math.abs(p.vx); }
+                    if(p.x > boxW/2) { p.x = boxW/2; p.vx *= -1; impulse += Math.abs(p.vx); }
+                    if(p.y < -boxH/2) { p.y = -boxH/2; p.vy *= -1; impulse += Math.abs(p.vy); }
+                    if(p.y > boxH/2) { p.y = boxH/2; p.vy *= -1; impulse += Math.abs(p.vy); }
+                    if(p.z < -boxD/2) { p.z = -boxD/2; p.vz *= -1; impulse += Math.abs(p.vz); }
+                    if(p.z > boxD/2) { p.z = boxD/2; p.vz *= -1; impulse += Math.abs(p.vz); }
+                    ke += (p.vx**2 + p.vy**2 + p.vz**2);
+                });
+                if(Math.random() > 0.8) {
+                    setStats({
+                        P: impulse / (dt * 100),
+                        T: ke / next.length
+                    });
+                }
+                return next;
+            });
+        }, 20);
+        return () => clearInterval(id);
+    }, [playing, forceEq, volume]);
+
+    const draw = (ctx, project) => {
+        const w = 50*volume; const h = 50; const d = 50;
+        const corners = [
+            [-w/2,-h/2,-d/2], [w/2,-h/2,-d/2], [w/2,h/2,-d/2], [-w/2,h/2,-d/2],
+            [-w/2,-h/2,d/2], [w/2,-h/2,d/2], [w/2,h/2,d/2], [-w/2,h/2,d/2]
+        ].map(c => project(c[0], c[1], c[2]));
+
+        ctx.strokeStyle = '#475569'; ctx.lineWidth = 1;
+        const edges = [[0,1],[1,2],[2,3],[3,0], [4,5],[5,6],[6,7],[7,4], [0,4],[1,5],[2,6],[3,7]];
+        edges.forEach(e => {
+            ctx.beginPath(); ctx.moveTo(corners[e[0]].x, corners[e[0]].y); ctx.lineTo(corners[e[1]].x, corners[e[1]].y); ctx.stroke();
+        });
+        particles.forEach(p => {
+            const proj = project(p.x, p.y, p.z);
+            ctx.fillStyle = p.color;
+            ctx.beginPath(); ctx.arc(proj.x, proj.y, Math.max(2, 5*(proj.s/20)), 0, 7); ctx.fill();
+        });
+    };
+
+    return (
+        <div className={`flex flex-col h-[calc(100dvh-60px)] -m-4 relative ${fullScreen ? 'fixed inset-0 z-50 m-0 bg-slate-950' : ''}`}>
+             <div className={`${fullScreen ? 'h-full' : 'h-[50vh]'} relative shrink-0`}>
+                <SimCanvas draw={draw} initZoom={15} />
+                <OverlayControls playing={playing} setPlaying={setPlaying} fullScreen={fullScreen} setFullScreen={setFullScreen} reset={()=>{}} />
+                <div className="absolute bottom-4 left-4 text-[10px] font-mono text-slate-400 flex gap-4 bg-black/50 p-2 rounded backdrop-blur">
+                    <span>Pres: {stats.P.toFixed(2)}</span>
+                    <span>Temp: {stats.T.toFixed(2)}</span>
+                    <span>Vol: {(volume*100).toFixed(0)}%</span>
+                </div>
+            </div>
+            {!fullScreen && (
+                <div className="flex-1 bg-slate-900 p-4 overflow-y-auto border-t border-slate-800 space-y-4">
+                    <h3 className="text-xs font-bold text-orange-400 uppercase">Interaction Force F(r)</h3>
+                    <InputRow label="F =" val={forceEq} set={setForceEq} />
+                    <div className="text-[10px] text-slate-500">Positive = Repulsion. Try: 100/r^2 (Coulomb) or 12*((1/r)^13-(1/r)^7) (Lennard-Jones)</div>
+                    
+                    <div className="bg-slate-800 p-3 rounded">
+                        <div className="flex justify-between text-xs text-slate-400 mb-2"><span>Container Volume</span><span>{volume}x</span></div>
+                        <input type="range" min="0.5" max="2.0" step="0.1" value={volume} onChange={e=>setVolume(parseFloat(e.target.value))} className="w-full h-1 bg-slate-600 rounded appearance-none accent-blue-500"/>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
 };
 
+// --- APP ---
 const App = () => {
     const [view, setView] = useState('home'); const [sim, setSim] = useState(null); const [menu, setMenu] = useState(false);
+    
+    // Data from original file
+    const BOOKS = [
+        { id: 1, title: "Physics Concept Builder Vol 1", price: "₹450", link: "https://amzn.in/d/hCAUILC", desc: "For JEE Main & Advanced", color: "bg-orange-100 text-orange-800" },
+        { id: 2, title: "Advanced Problems in Physics", price: "₹650", link: "https://amzn.in/d/gSdEWNs", desc: "Problem Collection", color: "bg-blue-100 text-blue-800" },
+        { id: 3, title: "Digital Physics Interactive", price: "₹200", link: "https://play.google.com/store/books/details?id=dINYEQAAQBAJ", desc: "e-Book Edition", color: "bg-green-100 text-green-800" }
+    ];
+    const SIMS = [
+        { id: 'orbit', title: 'N-Body ODE Solver', desc: 'Coupled Differential Equations', color: 'bg-indigo-50 text-indigo-600' },
+        { id: 'em', title: 'Electromagnetism', desc: 'Maxwell & Lorentz Dynamics', color: 'bg-violet-50 text-violet-600' },
+        { id: 'thermo', title: 'Thermodynamics', desc: 'Stat Mech & 3 Laws', color: 'bg-orange-50 text-orange-600' },
+        { id: 'pendulum', title: 'Pendulum (SHM)', desc: 'Oscillations', color: 'bg-pink-50 text-pink-600' },
+        { id: 'optics', title: 'Speed of Light', desc: 'Relativity', color: 'bg-cyan-50 text-cyan-600' },
+    ];
+    const PROFILE = { name: "Abhishek Kumar", role: "Physics Faculty (9+ yrs)", details: ["B.Tech (CSE)", "Ex-Faculty: Jaipuria School", "Ex-Faculty: S.P. College Pune", "Expert: Python, LaTeX"] };
+
+    // --- SimCanvas Placeholder for non-3D sims ---
+    const FallbackCanvas = ({ type }) => {
+        const canvasRef = useRef(null);
+        useEffect(() => {
+            const canvas = canvasRef.current; const ctx = canvas.getContext('2d'); let t = 0; let id;
+            const render = () => { t++; const w = canvas.width = canvas.parentElement.clientWidth; const h = canvas.height = 240; ctx.fillStyle = '#1e293b'; ctx.fillRect(0,0,w,h); const cx = w/2, cy = h/2;
+                if(type === 'pendulum') { ctx.fillStyle = '#f8fafc'; ctx.fillRect(0,0,w,h); const ang = Math.sin(t*0.05) * Math.PI/4; const bx = cx + 120*Math.sin(ang); const by = 20 + 120*Math.cos(ang); ctx.beginPath(); ctx.moveTo(cx,20); ctx.lineTo(bx,by); ctx.strokeStyle='#475569'; ctx.stroke(); ctx.beginPath(); ctx.arc(bx, by, 12, 0, 7); ctx.fillStyle='#e11d48'; ctx.fill(); }
+                if(type === 'optics') { const lx = (t*10)%w; ctx.beginPath(); ctx.arc(lx, cy, 4, 0, 7); ctx.fillStyle='#facc15'; ctx.fill(); ctx.fillStyle='#fff'; ctx.fillText('Photon c', 10, cy-20); }
+                id = requestAnimationFrame(render);
+            }; render(); return () => cancelAnimationFrame(id);
+        }, [type]);
+        return <div className="rounded-xl overflow-hidden mt-4 shadow-inner"><canvas ref={canvasRef} className="block w-full h-[240px]"/></div>;
+    };
+
     return (
         <div className="flex flex-col h-full bg-slate-50">
             <header className="bg-white border-b border-slate-200 px-4 py-3 flex justify-between items-center shrink-0 sticky top-0 z-20">
@@ -579,8 +556,7 @@ const App = () => {
                     <div className="animate-in slide-in-from-bottom duration-300">
                         <button onClick={() => setView('home')} className="flex items-center gap-2 text-slate-500 mb-4 font-bold text-sm"><Icons.Back /> Back</button>
                         <h2 className="text-2xl font-bold text-slate-900 mb-2">{SIMS.find(s=>s.id===sim)?.title}</h2>
-                        {sim === 'orbit' ? <ODESolver /> : sim === 'em' ? <EMSolver /> : sim === 'thermo' ? <ThermoSolver /> : <SimCanvas type={sim} />}
-                        {sim !== 'orbit' && sim !== 'em' && sim !== 'thermo' && <div className="mt-4 p-4 bg-blue-50 border border-blue-100 rounded-xl text-sm text-blue-900"><strong>Note:</strong> Visualize the change. This simulation runs in real-time.</div>}
+                        {sim === 'orbit' ? <ODESolver /> : sim === 'em' ? <EMSolver /> : sim === 'thermo' ? <ThermoSolver /> : <FallbackCanvas type={sim} />}
                     </div>
                 )}
                 {view === 'books' && (<div className="space-y-4"><h2 className="font-bold text-xl text-slate-800">Study Material</h2>{BOOKS.map(b => (<div key={b.id} className="bg-white rounded-xl p-4 shadow-sm border border-slate-100 flex gap-4"><div className={`w-20 h-24 shrink-0 rounded flex items-center justify-center ${b.color}`}><Icons.Book /></div><div className="flex-1 flex flex-col"><h3 className="font-bold text-slate-900 leading-tight">{b.title}</h3><p className="text-xs text-slate-500 mt-1 mb-2">{b.desc}</p><div className="mt-auto flex justify-between items-center"><span className="text-xs font-bold bg-green-100 text-green-700 px-2 py-1 rounded">{b.price}</span><a href={b.link} target="_blank" className="text-xs font-bold bg-slate-900 text-white px-3 py-2 rounded">Buy Now</a></div></div></div>))}</div>)}
