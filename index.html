@@ -175,7 +175,7 @@ const SIMS = [
     { id: 'orbit', title: 'N-Body ODE Solver', desc: 'Coupled Differential Equations', color: 'bg-indigo-50 text-indigo-600' },
     { id: 'em', title: 'Electromagnetism', desc: 'Maxwell & Lorentz Dynamics', color: 'bg-violet-50 text-violet-600' },
     { id: 'thermo', title: 'Thermodynamics', desc: 'Stat Mech & 3 Laws', color: 'bg-orange-50 text-orange-600' },
-    { id: 'pendulum', title: 'Pendulum (SHM)', desc: 'Oscillations', color: 'bg-pink-50 text-pink-600' },
+    { id: 'wave', title: 'Wave Motion', desc: 'String, Sound & Light', color: 'bg-pink-50 text-pink-600' },
     { id: 'optics', title: 'Speed of Light', desc: 'Relativity', color: 'bg-cyan-50 text-cyan-600' },
 ];
 
@@ -446,13 +446,101 @@ const ThermoSolver = () => {
     return ( <div className={`flex flex-col h-[calc(100dvh-60px)] -m-4 relative ${fullScreen ? 'fixed inset-0 z-50 m-0 bg-slate-950' : ''}`}> <div className={`relative transition-all duration-500 bg-slate-900 overflow-hidden shadow-xl z-20 ${fullScreen ? 'absolute inset-0 h-full' : 'h-[35%] shrink-0'}`}> <SimCanvas draw={draw} initZoom={15} /> <div className="absolute top-4 right-4 flex items-center gap-3"> <button onClick={() => init('mixing')} className="p-2 rounded-full bg-slate-800/80 text-slate-400 hover:text-white backdrop-blur"><Icons.Close /></button> <button onClick={() => setPlaying(!playing)} className="p-2 rounded-full bg-blue-600/90 text-white shadow-lg backdrop-blur">{playing ? "||" : "▶"}</button> <button onClick={() => setFullScreen(!fullScreen)} className="p-2 rounded-full bg-slate-800/80 text-slate-400 hover:text-white backdrop-blur">⛶</button> </div> <div className="absolute bottom-4 left-4 text-[10px] font-mono text-slate-400 flex gap-4"> <span>P: {statsRef.current.P.toFixed(2)}</span><span>T: {statsRef.current.T.toFixed(2)}</span><span>S: {statsRef.current.S.toFixed(2)}</span> </div> </div> {!fullScreen && ( <div className="flex-1 flex flex-col bg-slate-950 overflow-hidden"> <div className="flex border-b border-slate-800 shrink-0"> {['lab', 'table', 'graph'].map(id => (<button key={id} onClick={() => setTab(id)} className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-widest transition ${tab === id ? 'text-blue-400 bg-slate-900 border-b-2 border-blue-500' : 'text-slate-600 hover:text-slate-400'}`}>{id}</button>))} </div> <div className="flex-1 overflow-hidden relative"> {tab === 'lab' && ( <div className="h-full overflow-y-auto p-4 space-y-4 no-scrollbar"> <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">{Object.entries(PRESETS).map(([k, v]) => (<button key={k} onClick={() => { setConfig({...config, force:v.force}); init(v.setup); }} className="shrink-0 px-3 py-1 rounded border border-slate-700 text-[10px] font-bold text-slate-400 hover:bg-slate-800 hover:text-white transition">{v.name}</button>))}</div> <div className="grid gap-4"> <div className="space-y-2"><div className="text-[10px] font-bold text-orange-500 uppercase">Process Control</div> <div className="glass-panel p-3 rounded flex flex-col gap-2"> <div className="flex justify-between text-xs text-slate-400"><span>Heat Injection (T)</span><span>{config.heat}</span></div> <input type="range" min="0" max="2" step="0.1" value={config.heat} onChange={e=>setConfig({...config, heat:parseFloat(e.target.value)})} className="w-full h-1 bg-orange-900 rounded appearance-none accent-orange-500" /> <div className="flex justify-between text-xs text-slate-400 mt-2"><span>Volume (V)</span><span>{config.volume}</span></div> <input type="range" min="0.3" max="1" step="0.1" value={config.volume} onChange={e=>setConfig({...config, volume:parseFloat(e.target.value)})} className="w-full h-1 bg-blue-900 rounded appearance-none accent-blue-500" /> </div> </div> <EqInput label="Interaction Potential F(r)" sub="Force =" val={config.force} set={v=>setConfig({...config, force:v})} color="border-emerald-500" /> </div> </div> )} {tab === 'table' && ( <div className="h-full flex flex-col"> <div className="p-2 flex justify-between bg-slate-900 border-b border-slate-800"><span className="text-[10px] text-slate-500 pt-1">Thermodynamic State</span><button onClick={()=>{const doc=new jspdf.jsPDF();doc.autoTable({head:[['Time','P','V','T','S']],body:displayData.map(d=>[d.t.toFixed(2),d.P.toFixed(2),d.V.toFixed(0),d.T.toFixed(2),d.S.toFixed(3)])});doc.save('thermo_data.pdf')}} className="bg-slate-800 text-white text-[10px] px-3 py-1 rounded border border-slate-700">PDF</button></div> <div className="flex-1 overflow-auto scroller"><table className="data-table"><thead><tr><th>t</th><th>P</th><th>V</th><th>T</th><th>S</th></tr></thead><tbody>{displayData.slice().reverse().map((r, i) => (<tr key={i}><td className="text-blue-400">{r.t.toFixed(1)}</td><td>{r.P.toFixed(2)}</td><td>{r.V.toFixed(0)}</td><td>{r.T.toFixed(2)}</td><td>{r.S.toFixed(2)}</td></tr>))}</tbody></table></div> </div> )} {tab === 'graph' && (<div className="h-full overflow-y-auto p-4 space-y-4 no-scrollbar"><div className="grid grid-cols-2 gap-3"><GraphCard title="PV Diagram" data={displayData} x="V" y="P" col="#fbbf24" /><GraphCard title="Entropy vs Time" data={displayData} x="t" y="S" col="#10b981" /></div></div>)} </div> </div> )} </div> );
 };
 
+// --- 4. WAVESOLVER (NEW: REPLACES PENDULUM) ---
+const WaveSolver = () => {
+    const PRESETS = {
+        string: { name: "String (Transverse)", type: 'trans', eq: "3 * sin(x - 2*t)", desc: "y = A sin(kx - wt)" },
+        sound: { name: "Sound (Pressure)", type: 'long', eq: "3 * cos(x - 3*t)", desc: "y represents density" },
+        light: { name: "Light (EM)", type: 'light', eq: "3 * sin(x - 4*t)", desc: "E & B Fields" },
+        beat: { name: "Beats", type: 'trans', eq: "2*sin(x-10*t) + 2*sin(x-12*t)", desc: "Superposition" }
+    };
+    const [fullScreen, setFullScreen] = useState(false); const [tab, setTab] = useState('sim'); const [playing, setPlaying] = useState(true);
+    const [config, setConfig] = useState(PRESETS.string); const [eqStr, setEqStr] = useState(PRESETS.string.eq);
+    const timeRef = useRef(0); const funcRef = useRef(null); const [displayData, setDisplayData] = useState([]);
+
+    useEffect(() => { try { funcRef.current = new Function('x','t', `return ${parseEq(eqStr)}`); } catch(e) {} }, [eqStr]);
+
+    // Physics Loop
+    useEffect(() => {
+        if(!playing) return;
+        let frame;
+        const loop = () => {
+            timeRef.current += 0.05;
+            if(funcRef.current && Math.random() > 0.8) {
+                const y0 = funcRef.current(0, timeRef.current);
+                setDisplayData(p => { const n = [...p, { t: timeRef.current, y: y0 }]; return n.length > 500 ? n.slice(-500) : n; });
+            }
+            frame = requestAnimationFrame(loop);
+        };
+        loop(); return () => cancelAnimationFrame(frame);
+    }, [playing]);
+
+    const draw = (ctx, project, w, h) => {
+        const t = timeRef.current;
+        const f = funcRef.current;
+        if(!f) return;
+
+        // Draw Axis
+        const start = project(-20, 0, 0); const end = project(20, 0, 0);
+        ctx.beginPath(); ctx.strokeStyle = '#334155'; ctx.moveTo(start.x, start.y); ctx.lineTo(end.x, end.y); ctx.stroke();
+
+        const points = [];
+        for(let x = -15; x <= 15; x += 0.5) {
+            const y = f(x, t);
+            points.push({x, y});
+        }
+
+        if(config.type === 'trans' || config.type === 'beat') {
+            ctx.beginPath(); ctx.strokeStyle = '#ec4899'; ctx.lineWidth = 2;
+            points.forEach((pt, i) => {
+                const p = project(pt.x, pt.y, 0);
+                if(i===0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+                // Particle view
+                ctx.fillStyle = '#fbcfe8'; ctx.beginPath(); ctx.arc(p.x, p.y, 2, 0, 7); ctx.fill();
+            });
+            ctx.stroke();
+        } 
+        else if (config.type === 'long') {
+            // Longitudinal: Map amplitude to X-displacement
+            points.forEach(pt => {
+                const dx = pt.y * 0.3; // Scale amp to displacement
+                const p = project(pt.x + dx, 0, 0);
+                // Draw vertical lines to show compression
+                const top = project(pt.x + dx, 2, 0); const bot = project(pt.x + dx, -2, 0);
+                ctx.beginPath(); ctx.strokeStyle = `rgba(236, 72, 153, ${0.3 + Math.abs(pt.y)*0.2})`; 
+                ctx.moveTo(top.x, top.y); ctx.lineTo(bot.x, bot.y); ctx.stroke();
+                // Particles
+                ctx.fillStyle = '#ec4899'; ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(1, 4-Math.abs(dx)), 0, 7); ctx.fill();
+            });
+        }
+        else if (config.type === 'light') {
+            // E-Field (Vertical)
+            ctx.beginPath(); ctx.strokeStyle = '#fbbf24'; ctx.lineWidth = 2;
+            points.forEach((pt, i) => { const p = project(pt.x, pt.y, 0); if(i===0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); });
+            ctx.stroke();
+            // B-Field (Horizontal/Z)
+            ctx.beginPath(); ctx.strokeStyle = '#22d3ee'; ctx.lineWidth = 2;
+            points.forEach((pt, i) => { const p = project(pt.x, 0, pt.y); if(i===0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); });
+            ctx.stroke();
+            // Vectors
+            points.forEach((pt, i) => {
+                if(i%4!==0) return;
+                const o = project(pt.x, 0, 0); const pe = project(pt.x, pt.y, 0); const pb = project(pt.x, 0, pt.y);
+                ctx.beginPath(); ctx.strokeStyle='#fbbf2444'; ctx.moveTo(o.x, o.y); ctx.lineTo(pe.x, pe.y); ctx.stroke();
+                ctx.beginPath(); ctx.strokeStyle='#22d3ee44'; ctx.moveTo(o.x, o.y); ctx.lineTo(pb.x, pb.y); ctx.stroke();
+            });
+        }
+    };
+
+    return ( <div className={`flex flex-col h-[calc(100dvh-60px)] -m-4 relative ${fullScreen ? 'fixed inset-0 z-50 m-0 bg-slate-950' : ''}`}> <div className={`relative transition-all duration-500 bg-slate-900 overflow-hidden shadow-xl z-20 ${fullScreen ? 'absolute inset-0 h-full' : 'h-[35%] shrink-0'}`}> <SimCanvas draw={draw} initZoom={25} /> <div className="absolute top-4 right-4 flex items-center gap-3"> <button onClick={() => { timeRef.current=0; setDisplayData([]); }} className="p-2 rounded-full bg-slate-800/80 text-slate-400 hover:text-white backdrop-blur"><Icons.Reset /></button> <button onClick={() => setPlaying(!playing)} className="p-2 rounded-full bg-blue-600/90 text-white shadow-lg backdrop-blur">{playing ? "||" : "▶"}</button> <button onClick={() => setFullScreen(!fullScreen)} className="p-2 rounded-full bg-slate-800/80 text-slate-400 hover:text-white backdrop-blur">⛶</button> </div> <div className="absolute bottom-4 left-4 text-[10px] font-mono text-slate-400"> <span className="text-pink-400 font-bold">{config.name}</span> | y(x,t) </div> </div> {!fullScreen && ( <div className="flex-1 flex flex-col bg-slate-950 overflow-hidden"> <div className="flex border-b border-slate-800 shrink-0"> {['sim', 'table', 'graph'].map(id => (<button key={id} onClick={() => setTab(id)} className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-widest transition ${tab === id ? 'text-blue-400 bg-slate-900 border-b-2 border-blue-500' : 'text-slate-600 hover:text-slate-400'}`}>{id}</button>))} </div> <div className="flex-1 overflow-hidden relative"> {tab === 'sim' && ( <div className="h-full overflow-y-auto p-4 space-y-4 no-scrollbar"> <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800 mb-4"> <div className="text-[10px] font-bold text-slate-500 uppercase mb-2">Wave Equation</div> <div className="font-mono text-white text-sm">y(x,t) = A sin(kx - ωt + φ)</div> </div> <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">{Object.entries(PRESETS).map(([k, v]) => (<button key={k} onClick={() => { setConfig(v); setEqStr(v.eq); }} className="shrink-0 px-3 py-1 rounded border border-slate-700 text-[10px] font-bold text-slate-400 hover:bg-slate-800 hover:text-white transition">{v.name}</button>))}</div> <EqInput label="Wave Function y(x,t)" sub="y =" val={eqStr} set={setEqStr} color="border-pink-500" /> </div> )} {tab === 'table' && ( <div className="h-full flex flex-col"> <div className="p-2 flex justify-between bg-slate-900 border-b border-slate-800"><span className="text-[10px] text-slate-500 pt-1">Source Displacement (x=0)</span><button onClick={()=>{const doc=new jspdf.jsPDF();doc.autoTable({head:[['Time','Y (x=0)']],body:displayData.map(d=>[d.t.toFixed(2),d.y.toFixed(4)])});doc.save('wave_data.pdf')}} className="bg-slate-800 text-white text-[10px] px-3 py-1 rounded border border-slate-700">PDF</button></div> <div className="flex-1 overflow-auto scroller"><table className="data-table"><thead><tr><th>t</th><th>y (x=0)</th></tr></thead><tbody>{displayData.slice().reverse().map((r, i) => (<tr key={i}><td className="text-blue-400">{r.t.toFixed(2)}</td><td>{r.y.toFixed(4)}</td></tr>))}</tbody></table></div> </div> )} {tab === 'graph' && (<div className="h-full overflow-y-auto p-4 space-y-4 no-scrollbar"><GraphCard title="Source Oscillation (y vs t at x=0)" data={displayData} x="t" y="y" col="#ec4899" /></div>)} </div> </div> )} </div> );
+};
+
 // --- SIM CANVAS (FALLBACK) ---
 const SimCanvasFallback = ({ type }) => {
     const canvasRef = useRef(null);
     useEffect(() => {
         const canvas = canvasRef.current; const ctx = canvas.getContext('2d'); let t = 0; let id;
         const render = () => { t++; const w = canvas.width = canvas.parentElement.clientWidth; const h = canvas.height = 240; ctx.fillStyle = '#1e293b'; ctx.fillRect(0,0,w,h); const cx = w/2, cy = h/2;
-            if(type === 'pendulum') { ctx.fillStyle = '#f8fafc'; ctx.fillRect(0,0,w,h); const ang = Math.sin(t*0.05) * Math.PI/4; const bx = cx + 120*Math.sin(ang); const by = 20 + 120*Math.cos(ang); ctx.beginPath(); ctx.moveTo(cx,20); ctx.lineTo(bx,by); ctx.strokeStyle='#475569'; ctx.stroke(); ctx.beginPath(); ctx.arc(bx, by, 12, 0, 7); ctx.fillStyle='#e11d48'; ctx.fill(); }
             if(type === 'optics') { const lx = (t*10)%w; ctx.beginPath(); ctx.arc(lx, cy, 4, 0, 7); ctx.fillStyle='#facc15'; ctx.fill(); ctx.fillStyle='#fff'; ctx.fillText('Photon c', 10, cy-20); }
             id = requestAnimationFrame(render);
         }; render(); return () => cancelAnimationFrame(id);
@@ -502,8 +590,8 @@ const App = () => {
                     <div className="animate-in slide-in-from-bottom duration-300">
                         <button onClick={() => setView('home')} className="flex items-center gap-2 text-slate-500 mb-4 font-bold text-sm"><Icons.Back /> Back</button>
                         <h2 className="text-2xl font-bold text-slate-900 mb-2">{SIMS.find(s=>s.id===sim)?.title}</h2>
-                        {sim === 'orbit' ? <ODESolver /> : sim === 'em' ? <EMSolver /> : sim === 'thermo' ? <ThermoSolver /> : <SimCanvasFallback type={sim} />}
-                        {sim !== 'orbit' && sim !== 'em' && sim !== 'thermo' && <div className="mt-4 p-4 bg-blue-50 border border-blue-100 rounded-xl text-sm text-blue-900"><strong>Note:</strong> Visualize the change. This simulation runs in real-time.</div>}
+                        {sim === 'orbit' ? <ODESolver /> : sim === 'em' ? <EMSolver /> : sim === 'thermo' ? <ThermoSolver /> : sim === 'wave' ? <WaveSolver /> : <SimCanvasFallback type={sim} />}
+                        {sim !== 'orbit' && sim !== 'em' && sim !== 'thermo' && sim !== 'wave' && <div className="mt-4 p-4 bg-blue-50 border border-blue-100 rounded-xl text-sm text-blue-900"><strong>Note:</strong> Visualize the change. This simulation runs in real-time.</div>}
                     </div>
                 )}
                 {view === 'books' && (<div className="space-y-4"><h2 className="font-bold text-xl text-slate-800">Study Material</h2>{BOOKS.map(b => (<div key={b.id} className="bg-white rounded-xl p-4 shadow-sm border border-slate-100 flex gap-4"><div className={`w-20 h-24 shrink-0 rounded flex items-center justify-center ${b.color}`}><Icons.Book /></div><div className="flex-1 flex flex-col"><h3 className="font-bold text-slate-900 leading-tight">{b.title}</h3><p className="text-xs text-slate-500 mt-1 mb-2">{b.desc}</p><div className="mt-auto flex justify-between items-center"><span className="text-xs font-bold bg-green-100 text-green-700 px-2 py-1 rounded">{b.price}</span><a href={b.link} target="_blank" className="text-xs font-bold bg-slate-900 text-white px-3 py-2 rounded">Buy Now</a></div></div></div>))}</div>)}
