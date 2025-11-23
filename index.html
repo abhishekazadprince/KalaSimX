@@ -3,15 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="theme-color" content="#020617">
+    <meta name="theme-color" content="#ffffff">
     <meta name="mobile-web-app-capable" content="yes">
+    
     <link rel="manifest" href="manifest.json">
+    
     <title>Abhishek Physics</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
 
@@ -26,11 +29,11 @@
         }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         
-        /* EXACT CANVAS STYLES FROM FILE 2 */
+        /* 3D CANVAS STYLES */
         canvas { cursor: grab; touch-action: none; }
         canvas:active { cursor: grabbing; }
 
-        /* UI STYLES FROM FILE 1 */
+        /* UI STYLES */
         .scroller::-webkit-scrollbar { width: 4px; height: 4px; }
         .scroller::-webkit-scrollbar-track { background: #0f172a; }
         .scroller::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
@@ -49,7 +52,12 @@
 
 <script>
     if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(err => console.log('SW Failed:', err)));
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('sw.js').then(
+                registration => console.log('SW Registered!', registration.scope),
+                err => console.log('SW Failed:', err)
+            );
+        });
     }
 </script>
 
@@ -71,7 +79,7 @@ const Icons = {
     Full: () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
 };
 
-// --- EXACT 3D CAMERA CONTROLLER FROM SCREENTOUCH.HTML ---
+// --- 3D CAMERA CONTROLLER ---
 const useOrbitControls = (ref, initialZoom = 30) => {
     const camera = useRef({ yaw: 0.5, pitch: 0.3, zoom: initialZoom });
     const drag = useRef({ active: false, x: 0, y: 0 });
@@ -93,7 +101,6 @@ const useOrbitControls = (ref, initialZoom = 30) => {
             const dy = t.clientY - drag.current.y;
             camera.current.yaw += dx * 0.01;
             camera.current.pitch += dy * 0.01;
-            // Clamp pitch
             camera.current.pitch = Math.max(-Math.PI/2 + 0.1, Math.min(Math.PI/2 - 0.1, camera.current.pitch));
             drag.current.x = t.clientX;
             drag.current.y = t.clientY;
@@ -113,8 +120,7 @@ const useOrbitControls = (ref, initialZoom = 30) => {
     return camera;
 };
 
-// --- EXACT SIM CANVAS CONTAINER FROM SCREENTOUCH.HTML ---
-// This handles the render loop and 3D projection exactly like File 2
+// --- SIMULATION CANVAS CONTAINER ---
 const SimCanvas = ({ draw, initZoom=30 }) => {
     const canvasRef = useRef(null);
     const cam = useOrbitControls(canvasRef, initZoom);
@@ -129,29 +135,24 @@ const SimCanvas = ({ draw, initZoom=30 }) => {
             const h = cvs.height = cvs.clientHeight;
             const cx = w/2, cy = h/2;
 
-            ctx.fillStyle = '#020617'; // Dark Slate (File 2 background)
+            ctx.fillStyle = '#020617';
             ctx.fillRect(0,0,w,h);
 
-            // EXACT 3D PROJECTION LOGIC FROM FILE 2
             const project = (x,y,z) => {
                 const { yaw, pitch, zoom } = cam.current;
-                // Rotate Y
                 let x1 = x * Math.cos(yaw) - z * Math.sin(yaw);
                 let z1 = z * Math.cos(yaw) + x * Math.sin(yaw);
-                // Rotate X
                 let y2 = y * Math.cos(pitch) - z1 * Math.sin(pitch);
                 let z2 = z1 * Math.cos(pitch) + y * Math.sin(pitch);
-                // Perspective
                 const scale = 500 / (500 - z2) * zoom;
                 return {
                     x: cx + x1 * scale,
-                    y: cy - y2 * scale, // Invert Y for typical physics coords
+                    y: cy - y2 * scale,
                     s: scale,
                     z: z2
                 };
             };
 
-            // Call the passed draw function with the File 2 tools
             if(draw) draw(ctx, project, w, h);
 
             fid = requestAnimationFrame(render);
@@ -219,7 +220,7 @@ const GraphCard = ({ title, data, x, y, col }) => {
     );
 };
 
-// --- 1. ODESOLVER (INTEGRATED: File 1 Logic + File 2 Visuals) ---
+// --- 1. ODESOLVER ---
 const ODESolver = () => {
     const PRESETS = {
         shm: { name: "Simple Harmonic", mode: 'newtonian', x: "-4*x", y: "-4*y", z: "-4*z", setup: {x:3, y:2, z:0, vx:0, vy:0, vz:2} },
@@ -235,7 +236,6 @@ const ODESolver = () => {
     useEffect(() => { try { funcRef.current = new Function('x','y','z','vx','vy','vz','t', `return { fx: ${parseEq(eqs.x)}, fy: ${parseEq(eqs.y)}, fz: ${parseEq(eqs.z)} };`); } catch(e) { } }, [eqs]);
     const loadPreset = (key) => { const p = PRESETS[key]; setMode(p.mode); setEqs({ x: p.x, y: p.y, z: p.z }); bodiesRef.current = [{ ...p.setup, ax:0, ay:0, az:0 }]; timeRef.current = 0; historyRef.current = []; setDisplayData([]); setDt(p.mode === 'flow' ? 0.01 : 0.02); };
     
-    // Physics Loop (File 1 - Robust)
     useEffect(() => { 
         let frameId; 
         const loop = () => { 
@@ -259,7 +259,6 @@ const ODESolver = () => {
     
     useEffect(() => { const id = setInterval(() => { if(playing && historyRef.current.length > 0) { const last = historyRef.current[historyRef.current.length-1]; setDisplayData(prev => { const nu = [...prev, { t: timeRef.current, ...last }]; if(nu.length > 500) return nu.slice(-500); return nu; }); } }, 200); return () => clearInterval(id); }, [playing]);
     
-    // Draw Function passed to SimCanvas
     const draw = (ctx, project, w, h) => {
         const hist = historyRef.current; 
         if (hist.length > 1) { 
@@ -292,7 +291,7 @@ const ODESolver = () => {
     return ( <div className={`flex flex-col h-[calc(100dvh-60px)] -m-4 relative ${fullScreen ? 'fixed inset-0 z-50 m-0 bg-slate-950' : ''}`}> <div className={`relative transition-all duration-500 bg-slate-900 overflow-hidden shadow-xl z-20 ${fullScreen ? 'absolute inset-0 h-full' : 'h-[35%] shrink-0'}`}> <SimCanvas draw={draw} initZoom={mode === 'flow' ? 6 : 25} /> <div className="absolute top-4 right-4 flex items-center gap-3"> <button onClick={() => { bodiesRef.current = [{x:0.1,y:0,z:0,vx:0,vy:0,vz:0}]; timeRef.current=0; historyRef.current=[]; setDisplayData([]); }} className="p-2 rounded-full bg-slate-800/80 text-slate-400 hover:text-white backdrop-blur"><Icons.Close /></button> <button onClick={() => setPlaying(!playing)} className="p-2 rounded-full bg-blue-600/90 text-white shadow-lg backdrop-blur">{playing ? "||" : "▶"}</button> <button onClick={() => setFullScreen(!fullScreen)} className="p-2 rounded-full bg-slate-800/80 text-slate-400 hover:text-white backdrop-blur">⛶</button> </div> </div> {!fullScreen && ( <div className="flex-1 flex flex-col bg-slate-950 overflow-hidden"> <div className="flex border-b border-slate-800 shrink-0"> {['eq', 'table', 'graph'].map(id => (<button key={id} onClick={() => setTab(id)} className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-widest transition ${tab === id ? 'text-blue-400 bg-slate-900 border-b-2 border-blue-500' : 'text-slate-600 hover:text-slate-400'}`}>{id}</button>))} </div> <div className="flex-1 overflow-hidden relative"> {tab === 'eq' && ( <div className="h-full overflow-y-auto p-4 space-y-4 no-scrollbar"> <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">{Object.entries(PRESETS).map(([k, v]) => (<button key={k} onClick={() => loadPreset(k)} className="shrink-0 px-3 py-1 rounded border border-slate-700 text-[10px] font-bold text-slate-400 hover:bg-slate-800 hover:text-white transition">{v.name}</button>))}</div> <div className="grid gap-3"> <EqInput label="X Logic" sub={mode==='newtonian'?"x''=":"x'="} val={eqs.x} set={v=>setEqs({...eqs,x:v})} color="border-blue-500" /> <EqInput label="Y Logic" sub={mode==='newtonian'?"y''=":"y'="} val={eqs.y} set={v=>setEqs({...eqs,y:v})} color="border-purple-500" /> <EqInput label="Z Logic" sub={mode==='newtonian'?"z''=":"z'="} val={eqs.z} set={v=>setEqs({...eqs,z:v})} color="border-emerald-500" /> </div> </div> )} {tab === 'table' && ( <div className="h-full flex flex-col"> <div className="p-2 flex justify-between bg-slate-900 border-b border-slate-800"><span className="text-[10px] text-slate-500 pt-1">Live Data</span><button onClick={()=>{const doc=new jspdf.jsPDF();doc.autoTable({head:[['T','X','Y','V']],body:displayData.map(d=>[d.t.toFixed(3),d.x.toFixed(4),d.y.toFixed(4),d.vx.toFixed(4)])});doc.save('ode_data.pdf')}} className="bg-slate-800 text-white text-[10px] px-3 py-1 rounded border border-slate-700">PDF</button></div> <div className="flex-1 overflow-auto scroller"><table className="data-table"><thead><tr><th>T</th><th>X</th><th>Y</th><th>Vx</th></tr></thead><tbody>{displayData.slice().reverse().map((r, i) => (<tr key={i}><td className="text-blue-400">{r.t.toFixed(3)}</td><td>{r.x.toFixed(4)}</td><td>{r.y.toFixed(4)}</td><td>{r.vx.toFixed(4)}</td></tr>))}</tbody></table></div> </div> )} {tab === 'graph' && (<div className="h-full overflow-y-auto p-4 space-y-4 no-scrollbar"><div className="grid grid-cols-2 gap-3"><GraphCard title="X vs Y" data={displayData} x="x" y="y" col="#3b82f6" /><GraphCard title="X vs T" data={displayData} x="t" y="x" col="#10b981" /></div></div>)} </div> </div> )} </div> );
 };
 
-// --- 2. EMSOLVER (INTEGRATED: File 1 Logic + File 2 Visuals) ---
+// --- 2. EMSOLVER ---
 const EMSolver = () => {
     const PRESETS = { cyclotron: { name: "Cyclotron", Ex: "0", Ey: "0", Ez: "0", Bx: "0", By: "0", Bz: "1", q: 1, m: 1 }, drift: { name: "E x B Drift", Ex: "0", Ey: "1", Ez: "0", Bx: "0", By: "0", Bz: "1", q: 1, m: 1 }, wave: { name: "EM Wave", Ex: "cos(t-z)", Ey: "0", Ez: "0", Bx: "0", By: "cos(t-z)", Bz: "0", q: 1, m: 1 } };
     const [fullScreen, setFullScreen] = useState(false); const [tab, setTab] = useState('fields'); const [playing, setPlaying] = useState(true); const [fields, setFields] = useState(PRESETS.cyclotron); const [dt, setDt] = useState(0.02);
@@ -300,7 +299,6 @@ const EMSolver = () => {
     useEffect(() => { try { fieldFuncRef.current = new Function('x','y','z','t', `return { Ex: ${parseEq(fields.Ex)}, Ey: ${parseEq(fields.Ey)}, Ez: ${parseEq(fields.Ez)}, Bx: ${parseEq(fields.Bx)}, By: ${parseEq(fields.By)}, Bz: ${parseEq(fields.Bz)} };`); } catch(e) { } }, [fields]);
     const loadPreset = (key) => { const p = PRESETS[key]; setFields(p); bodiesRef.current = [{ x:0,y:0,z:0,vx:2,vy:0,vz:0,Ex:0,Ey:0,Ez:0,Bx:0,By:0,Bz:0,Fx:0,Fy:0,Fz:0 }]; timeRef.current = 0; historyRef.current = []; setDisplayData([]); };
     
-    // Physics Loop (File 1)
     useEffect(() => { let frameId; const loop = () => { if (!playing || !fieldFuncRef.current) return; const b = bodiesRef.current[0]; const t = timeRef.current; const calc = fieldFuncRef.current; const {q,m} = fields;
             const getAccel = (x, y, z, vx, vy, vz, t) => { const f = calc(x, y, z, t); return { ax: (q/m)*(f.Ex+vy*f.Bz-vz*f.By), ay: (q/m)*(f.Ey+vz*f.Bx-vx*f.Bz), az: (q/m)*(f.Ez+vx*f.By-vy*f.Bx), f }; };
             const k1 = getAccel(b.x, b.y, b.z, b.vx, b.vy, b.vz, t); const k2 = getAccel(b.x+b.vx*0.5*dt, b.y+b.vy*0.5*dt, b.z+b.vz*0.5*dt, b.vx+k1.ax*0.5*dt, b.vy+k1.ay*0.5*dt, b.vz+k1.az*0.5*dt, t+0.5*dt); const k3 = getAccel(b.x+b.vx*0.5*dt, b.y+b.vy*0.5*dt, b.z+b.vz*0.5*dt, b.vx+k2.ax*0.5*dt, b.vy+k2.ay*0.5*dt, b.vz+k2.az*0.5*dt, t+0.5*dt); const k4 = getAccel(b.x+b.vx*dt, b.y+b.vy*dt, b.z+b.vz*dt, b.vx+k3.ax*dt, b.vy+k3.ay*dt, b.vz+k3.az*dt, t+dt);
@@ -338,10 +336,10 @@ const EMSolver = () => {
         dv(b.Fx,b.Fy,b.Fz,'#ef4444'); 
     };
 
-    return ( <div className={`flex flex-col h-[calc(100dvh-60px)] -m-4 relative ${fullScreen ? 'fixed inset-0 z-50 m-0 bg-slate-950' : ''}`}> <div className={`relative transition-all duration-500 bg-slate-900 overflow-hidden shadow-xl z-20 ${fullScreen ? 'absolute inset-0 h-full' : 'h-[35%] shrink-0'}`}> <SimCanvas draw={draw} initZoom={20} /> <div className="absolute top-4 right-4 flex items-center gap-3"> <button onClick={() => { bodiesRef.current=[{x:0,y:0,z:0,vx:2,vy:0,vz:0,Ex:0,Ey:0,Ez:0,Bx:0,By:0,Bz:0,Fx:0,Fy:0,Fz:0}]; timeRef.current=0; historyRef.current=[]; setDisplayData([]); }} className="p-2 rounded-full bg-slate-800/80 text-slate-400 hover:text-white backdrop-blur"><Icons.Close /></button> <button onClick={() => setPlaying(!playing)} className="p-2 rounded-full bg-blue-600/90 text-white shadow-lg backdrop-blur">{playing ? "||" : "▶"}</button> <button onClick={() => setFullScreen(!fullScreen)} className="p-2 rounded-full bg-slate-800/80 text-slate-400 hover:text-white backdrop-blur">⛶</button> </div> <div className="absolute bottom-4 left-4 text-[10px] font-mono text-slate-400"> <span className="text-yellow-400">E-Field</span> | <span className="text-cyan-400">B-Field</span> | <span className="text-red-400">Force</span> </div> </div> {!fullScreen && ( <div className="flex-1 flex flex-col bg-slate-950 overflow-hidden"> <div className="flex border-b border-slate-800 shrink-0"> {['fields', 'table', 'graph'].map(id => (<button key={id} onClick={() => setTab(id)} className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-widest transition ${tab === id ? 'text-blue-400 bg-slate-900 border-b-2 border-blue-500' : 'text-slate-600 hover:text-slate-400'}`}>{id}</button>))} </div> <div className="flex-1 overflow-hidden relative"> {tab === 'fields' && ( <div className="h-full overflow-y-auto p-4 space-y-4 no-scrollbar"> <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800 mb-4"> <div className="text-[10px] font-bold text-slate-500 uppercase mb-2">MAXWELL-LORENTZ DYNAMICS</div> <div className="font-mono text-white text-sm">d²r/dt² = (q/m)(E + v × B)</div> </div> <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">{Object.entries(PRESETS).map(([k, v]) => (<button key={k} onClick={() => loadPreset(k)} className="shrink-0 px-3 py-1 rounded border border-slate-700 text-[10px] font-bold text-slate-400 hover:bg-slate-800 hover:text-white transition">{v.name}</button>))}</div> <div className="grid grid-cols-2 gap-3"> <div className="space-y-2"><div className="text-[10px] font-bold text-yellow-500">Electric (E)</div><EqInput label="Ex" val={fields.Ex} set={v=>setFields({...fields,Ex:v})} color="border-yellow-500"/><EqInput label="Ey" val={fields.Ey} set={v=>setFields({...fields,Ey:v})} color="border-yellow-500"/><EqInput label="Ez" val={fields.Ez} set={v=>setFields({...fields,Ez:v})} color="border-yellow-500"/></div> <div className="space-y-2"><div className="text-[10px] font-bold text-cyan-500">Magnetic (B)</div><EqInput label="Bx" val={fields.Bx} set={v=>setFields({...fields,Bx:v})} color="border-cyan-500"/><EqInput label="By" val={fields.By} set={v=>setFields({...fields,By:v})} color="border-cyan-500"/><EqInput label="Bz" val={fields.Bz} set={v=>setFields({...fields,Bz:v})} color="border-cyan-500"/></div> </div> </div> )} {tab === 'table' && ( <div className="h-full flex flex-col"> <div className="p-2 flex justify-between bg-slate-900 border-b border-slate-800"><span className="text-[10px] text-slate-500 pt-1">Real-time Data</span><button onClick={()=>{const doc=new jspdf.jsPDF();doc.autoTable({head:[['T','X','Y','Vx','Vy']],body:displayData.map(d=>[d.t.toFixed(3),d.x.toFixed(4),d.y.toFixed(4),d.vx.toFixed(4),d.vy.toFixed(4)])});doc.save('em_data.pdf')}} className="bg-slate-800 text-white text-[10px] px-3 py-1 rounded border border-slate-700">PDF</button></div> <div className="flex-1 overflow-auto scroller"><table className="data-table"><thead><tr><th>T</th><th>X</th><th>Y</th><th>Vx</th><th>Vy</th></tr></thead><tbody>{displayData.slice().reverse().map((r, i) => (<tr key={i}><td className="text-blue-400">{r.t.toFixed(3)}</td><td>{r.x.toFixed(4)}</td><td>{r.y.toFixed(4)}</td><td>{r.vx.toFixed(3)}</td><td>{r.vy.toFixed(3)}</td></tr>))}</tbody></table></div> </div> )} {tab === 'graph' && (<div className="h-full overflow-y-auto p-4 space-y-4 no-scrollbar"><div className="grid grid-cols-2 gap-3"><GraphCard title="Pos X-Y" data={displayData} x="x" y="y" col="#fbbf24" /><GraphCard title="Phase Vx-Vy" data={displayData} x="vx" y="vy" col="#22d3ee" /></div></div>)} </div> </div> )} </div> );
+    return ( <div className={`flex flex-col h-[calc(100dvh-60px)] -m-4 relative ${fullScreen ? 'fixed inset-0 z-50 m-0 bg-slate-950' : ''}`}> <div className={`relative transition-all duration-500 bg-slate-900 overflow-hidden shadow-xl z-20 ${fullScreen ? 'absolute inset-0 h-full' : 'h-[35%] shrink-0'}`}> <SimCanvas draw={draw} initZoom={20} /> <div className="absolute top-4 right-4 flex items-center gap-3"> <button onClick={() => { bodiesRef.current=[{x:0,y:0,z:0,vx:2,vy:0,vz:0,Ex:0,Ey:0,Ez:0,Bx:0,By:0,Bz:0,Fx:0,Fy:0,Fz:0}]; timeRef.current=0; historyRef.current=[]; setDisplayData([]); }} className="p-2 rounded-full bg-slate-800/80 text-slate-400 hover:text-white backdrop-blur"><Icons.Close /></button> <button onClick={() => setPlaying(!playing)} className="p-2 rounded-full bg-blue-600/90 text-white shadow-lg backdrop-blur">{playing ? "||" : "▶"}</button> <button onClick={() => setFullScreen(!fullScreen)} className="p-2 rounded-full bg-slate-800/80 text-slate-400 hover:text-white backdrop-blur">⛶</button> </div> <div className="absolute bottom-4 left-4 text-[10px] font-mono text-slate-400"> <span className="text-yellow-400">E-Field</span> | <span className="text-cyan-400">B-Field</span> | <span className="text-red-400">Force</span> </div> </div> {!fullScreen && ( <div className="flex-1 flex flex-col bg-slate-950 overflow-hidden"> <div className="flex border-b border-slate-800 shrink-0"> {['fields', 'table', 'graph'].map(id => (<button key={id} onClick={() => setTab(id)} className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-widest transition ${tab === id ? 'text-blue-400 bg-slate-900 border-b-2 border-blue-500' : 'text-slate-600 hover:text-slate-400'}`}>{id}</button>))} </div> <div className="flex-1 overflow-hidden relative"> {tab === 'fields' && ( <div className="h-full overflow-y-auto p-4 space-y-4 no-scrollbar"> <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800 mb-4"> <div className="text-[10px] font-bold text-slate-500 uppercase mb-2">MAXWELL-LORENTZ DYNAMICS</div> <div className="font-mono text-white text-sm">d²r/dt² = (q/m)(E + v × B)</div> </div> <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">{Object.entries(PRESETS).map(([k, v]) => (<button key={k} onClick={() => loadPreset(k)} className="shrink-0 px-3 py-1 rounded border border-slate-700 text-[10px] font-bold text-slate-400 hover:bg-slate-800 hover:text-white transition">{v.name}</button>))}</div> <div className="grid grid-cols-2 gap-3"> <div className="space-y-2"><div className="text-[10px] font-bold text-yellow-500">Electric (E)</div><EqInput label="Ex" val={fields.Ex} set={v=>setFields({...fields,Ex:v})} color="border-yellow-500"/><EqInput label="Ey" val={fields.Ey} set={v=>setFields({...fields,Ey:v})} color="border-yellow-500"/><EqInput label="Ez" val={fields.Ez} set={v=>setFields({...fields,Ez:v})} color="border-yellow-500"/></div> <div className="space-y-2"><div className="text-[10px] font-bold text-cyan-500">Magnetic (B)</div><EqInput label="Bx" val={fields.Bx} set={v=>setFields({...fields,Bx:v})} color="border-cyan-500"/><EqInput label="By" val={fields.By} set={v=>setFields({...fields,By:v})} color="border-cyan-500"/><EqInput label="Bz" val={fields.Bz} set={v=>setFields({...fields,Bz:v})} color="border-cyan-500"/></div> </div> </div> )} {tab === 'table' && ( <div className="h-full flex flex-col"> <div className="p-2 flex justify-between bg-slate-900 border-b border-slate-800"><span className="text-[10px] text-slate-500 pt-1">Real-time Data</span><button onClick={()=>{const doc=new jspdf.jsPDF();doc.autoTable({head:[['T','X','Y','Vx','Vy']],body:displayData.map(d=>[d.t.toFixed(3),d.x.toFixed(4),d.y.toFixed(4),d.vx.toFixed(3),d.vy.toFixed(3)])});doc.save('em_data.pdf')}} className="bg-slate-800 text-white text-[10px] px-3 py-1 rounded border border-slate-700">PDF</button></div> <div className="flex-1 overflow-auto scroller"><table className="data-table"><thead><tr><th>T</th><th>X</th><th>Y</th><th>Vx</th><th>Vy</th></tr></thead><tbody>{displayData.slice().reverse().map((r, i) => (<tr key={i}><td className="text-blue-400">{r.t.toFixed(3)}</td><td>{r.x.toFixed(4)}</td><td>{r.y.toFixed(4)}</td><td>{r.vx.toFixed(3)}</td><td>{r.vy.toFixed(3)}</td></tr>))}</tbody></table></div> </div> )} {tab === 'graph' && (<div className="h-full overflow-y-auto p-4 space-y-4 no-scrollbar"><div className="grid grid-cols-2 gap-3"><GraphCard title="Pos X-Y" data={displayData} x="x" y="y" col="#fbbf24" /><GraphCard title="Phase Vx-Vy" data={displayData} x="vx" y="vy" col="#22d3ee" /></div></div>)} </div> </div> )} </div> );
 };
 
-// --- 3. THERMOSOLVER (INTEGRATED & UPGRADED TO 3D) ---
+// --- 3. THERMOSOLVER ---
 const ThermoSolver = () => {
     const PRESETS = {
         zero: { name: "Zeroth Law (Mixing)", force: "0", setup: "mixing" },
