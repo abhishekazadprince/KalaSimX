@@ -18,9 +18,11 @@
     <style>
         body { -webkit-tap-highlight-color: transparent; user-select: none; font-family: sans-serif; background-color: #f8fafc; overscroll-behavior-y: none; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
-        /* Smooth Touch Canvas Styles */
-        canvas { touch-action: none; cursor: grab; }
+        
+        /* 3D Canvas Cursor & Touch - EXACT FROM SCREENTOUCH */
+        canvas { cursor: grab; touch-action: none; }
         canvas:active { cursor: grabbing; }
+
         /* Advanced UI Styles */
         .scroller::-webkit-scrollbar { width: 4px; height: 4px; }
         .scroller::-webkit-scrollbar-track { background: #0f172a; }
@@ -55,10 +57,14 @@ const Icons = {
     Book: () => <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>,
     Lab: () => <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M2 12h20"/><path d="M2 12l5-5"/><path d="M22 12l-5 5"/></svg>,
     User: () => <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
-    Close: () => <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+    Close: () => <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>,
+    Play: () => <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>,
+    Pause: () => <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>,
+    Reset: () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>,
+    Full: () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
 };
 
-// --- SMOOTH TOUCH CONTROLLER (From Second File) ---
+// --- 3D CAMERA CONTROLLER (EXACT COPY FROM SCREENTOUCH) ---
 const useOrbitControls = (ref, initialZoom = 30) => {
     const camera = useRef({ yaw: 0.5, pitch: 0.3, zoom: initialZoom });
     const drag = useRef({ active: false, x: 0, y: 0 });
@@ -87,8 +93,8 @@ const useOrbitControls = (ref, initialZoom = 30) => {
         };
         const end = () => drag.current.active = false;
         
-        el.addEventListener('mousedown', start); el.addEventListener('touchstart', start, {passive: false});
-        window.addEventListener('mousemove', move); window.addEventListener('touchmove', move, {passive: false});
+        el.addEventListener('mousedown', start); el.addEventListener('touchstart', start);
+        window.addEventListener('mousemove', move); window.addEventListener('touchmove', move);
         window.addEventListener('mouseup', end); window.addEventListener('touchend', end);
 
         return () => {
@@ -177,10 +183,10 @@ const ODESolver = () => {
             } catch (err) { setPlaying(false); } frameId = requestAnimationFrame(loop); }; if(playing) loop(); return () => cancelAnimationFrame(frameId); }, [playing, mode, dt]);
     useEffect(() => { const id = setInterval(() => { if(playing && historyRef.current.length > 0) { const last = historyRef.current[historyRef.current.length-1]; setDisplayData(prev => { const nu = [...prev, { t: timeRef.current, ...last }]; if(nu.length > 500) return nu.slice(-500); return nu; }); } }, 200); return () => clearInterval(id); }, [playing]);
     
-    // UPDATED VISUALIZER WITH EXACT TOUCH CODE
+    // UPDATED VISUALIZER WITH EXACT TOUCH CODE & PROJECTION
     const Visualizer = () => { 
         const canvasRef = useRef(null); 
-        const cam = useOrbitControls(canvasRef, 25);
+        const cam = useOrbitControls(canvasRef, mode === 'flow' ? 6 : 25);
         
         useEffect(() => { 
             const cvs = canvasRef.current; 
@@ -195,9 +201,9 @@ const ODESolver = () => {
                 ctx.fillStyle = '#020617'; 
                 ctx.fillRect(0, 0, w, h);
                 
-                const currentZoom = mode === 'flow' ? 6 : 25;
-                const { yaw, pitch } = cam.current;
+                const { yaw, pitch, zoom } = cam.current;
 
+                // EXACT PROJECT FUNCTION FROM SCREENTOUCH
                 const project = (x, y, z) => { 
                     // Rotate Y (yaw)
                     let x1 = x * Math.cos(yaw) - z * Math.sin(yaw);
@@ -205,9 +211,14 @@ const ODESolver = () => {
                     // Rotate X (pitch)
                     let y2 = y * Math.cos(pitch) - z1 * Math.sin(pitch);
                     let z2 = z1 * Math.cos(pitch) + y * Math.sin(pitch);
-                    
-                    const scale = 500 / (500 - z2); 
-                    return { x: cx + x1 * currentZoom * scale, y: cy - y2 * currentZoom * scale, s: scale }; 
+                    // Perspective
+                    const scale = 500 / (500 - z2) * zoom;
+                    return { 
+                        x: cx + x1 * scale, 
+                        y: cy - y2 * scale, // Invert Y for typical physics coords
+                        s: scale,
+                        z: z2 
+                    }; 
                 };
                 
                 const hist = historyRef.current; 
@@ -226,7 +237,7 @@ const ODESolver = () => {
                 
                 const b = bodiesRef.current[0]; 
                 const p = project(b.x, b.y, b.z); 
-                const rad = Math.max(2, 8 * p.s); 
+                const rad = Math.max(2, 6 * (p.s/20)); // Adapted radius scaling
                 const col = mode === 'flow' ? '245, 158, 11' : '59, 130, 246'; 
                 const grad = ctx.createRadialGradient(p.x, p.y, rad*0.2, p.x, p.y, rad*3); 
                 grad.addColorStop(0, `rgba(${col}, 1)`); 
@@ -264,10 +275,10 @@ const EMSolver = () => {
             const f = calc(nx, ny, nz, t+dt); const newBody = { x:nx, y:ny, z:nz, vx:nvx, vy:nvy, vz:nvz, ...f, Fx:k4.ax*m, Fy:k4.ay*m, Fz:k4.az*m }; bodiesRef.current = [newBody]; timeRef.current += dt; historyRef.current.push(newBody); if (historyRef.current.length > 1500) historyRef.current.shift(); frameId = requestAnimationFrame(loop); }; if(playing) loop(); return () => cancelAnimationFrame(frameId); }, [playing, fields, dt]);
     useEffect(() => { const id = setInterval(() => { if(playing && historyRef.current.length > 0) { const last = historyRef.current[historyRef.current.length-1]; setDisplayData(prev => { const nu = [...prev, { t: timeRef.current, ...last }]; if(nu.length > 500) return nu.slice(-500); return nu; }); } }, 200); return () => clearInterval(id); }, [playing]);
     
-    // UPDATED VISUALIZER WITH EXACT TOUCH CODE
+    // UPDATED VISUALIZER WITH EXACT TOUCH CODE & PROJECTION
     const Visualizer = () => { 
         const canvasRef = useRef(null); 
-        const cam = useOrbitControls(canvasRef, 20);
+        const cam = useOrbitControls(canvasRef, 25);
         
         useEffect(() => { 
             const cvs = canvasRef.current; 
@@ -282,8 +293,9 @@ const EMSolver = () => {
                 ctx.fillStyle = '#020617'; 
                 ctx.fillRect(0, 0, w, h);
                 
-                const { yaw, pitch } = cam.current;
+                const { yaw, pitch, zoom } = cam.current;
 
+                // EXACT PROJECT FUNCTION FROM SCREENTOUCH
                 const project = (x, y, z) => { 
                     // Rotate Y (yaw)
                     let x1 = x * Math.cos(yaw) - z * Math.sin(yaw);
@@ -291,9 +303,14 @@ const EMSolver = () => {
                     // Rotate X (pitch)
                     let y2 = y * Math.cos(pitch) - z1 * Math.sin(pitch);
                     let z2 = z1 * Math.cos(pitch) + y * Math.sin(pitch);
-                    
-                    const scale = 500 / (500 - z2); 
-                    return { x: cx + x1 * 20 * scale, y: cy - y2 * 20 * scale, s: scale }; 
+                    // Perspective
+                    const scale = 500 / (500 - z2) * zoom;
+                    return { 
+                        x: cx + x1 * scale, 
+                        y: cy - y2 * scale, // Invert Y for typical physics coords
+                        s: scale,
+                        z: z2 
+                    }; 
                 };
                 
                 const hist = historyRef.current; 
@@ -312,7 +329,7 @@ const EMSolver = () => {
                 
                 const b = bodiesRef.current[0]; 
                 const p = project(b.x, b.y, b.z); 
-                const rad = Math.max(2, 6 * p.s); 
+                const rad = Math.max(2, 6 * (p.s/20)); 
                 ctx.fillStyle = '#fff'; 
                 ctx.beginPath(); ctx.arc(p.x, p.y, rad, 0, 7); ctx.fill();
                 
