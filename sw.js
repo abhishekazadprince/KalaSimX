@@ -1,4 +1,4 @@
-const CACHE_NAME = 'physics-app-v6';
+const CACHE_NAME = 'physics-app-v7';
 const urlsToCache = [
   './',
   './index.html',
@@ -37,4 +37,5 @@ self.addEventListener('fetch', event => {
       .then(response => response || fetch(event.request))
   );
 });
+
 
