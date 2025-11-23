@@ -2,346 +2,411 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="theme-color" content="#ffffff">
-    <meta name="mobile-web-app-capable" content="yes">
-    
-    <link rel="manifest" href="manifest.json">
-    
-    <title>Abhishek Physics</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Physics Lab Ultimate</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-
+    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
 
     <style>
-        body { -webkit-tap-highlight-color: transparent; user-select: none; font-family: sans-serif; background-color: #f8fafc; overscroll-behavior-y: none; }
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        canvas { touch-action: none; }
-
-        /* Advanced ODE Solver Styles */
-        .scroller::-webkit-scrollbar { width: 4px; height: 4px; }
+        /* Core Layout */
+        body { background-color: #020617; color: white; overflow: hidden; touch-action: none; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+        #root { height: 100vh; width: 100vw; display: flex; flex-direction: column; }
+        
+        /* Custom Scrollbar */
+        .scroller { overflow-y: auto; -webkit-overflow-scrolling: touch; }
+        .scroller::-webkit-scrollbar { width: 4px; }
+        .scroller::-webkit-scrollbar-thumb { background: #3b82f6; border-radius: 2px; }
         .scroller::-webkit-scrollbar-track { background: #0f172a; }
-        .scroller::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
-        .glass-panel { background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(8px); border-bottom: 1px solid rgba(51, 65, 85, 0.5); }
-        .input-field { background: rgba(30, 41, 59, 0.5); border: 1px solid rgba(71, 85, 105, 0.5); color: #fff; font-family: monospace; }
-        .input-field:focus { border-color: #3b82f6; outline: none; background: rgba(30, 41, 59, 0.8); }
-        .data-table { width: 100%; font-size: 10px; font-family: monospace; border-collapse: collapse; }
-        .data-table th { background: #1e293b; position: sticky; top: 0; z-index: 10; text-align: left; padding: 8px; color: #94a3b8; }
-        .data-table td { border-bottom: 1px solid #1e293b; padding: 4px 8px; color: #cbd5e1; }
-        .data-table tr:nth-child(even) { background: rgba(255,255,255,0.02); }
+
+        /* 3D Canvas Cursor */
+        canvas { cursor: grab; touch-action: none; }
+        canvas:active { cursor: grabbing; }
+
+        /* UI Elements */
+        .glass-panel { background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(12px); border-top: 1px solid #1e293b; }
+        .eq-input { background: #1e293b; color: #a5f3fc; font-family: 'Courier New', monospace; border: 1px solid #334155; border-radius: 4px; padding: 4px 8px; font-size: 12px; width: 100%; outline: none; }
+        .eq-input:focus { border-color: #3b82f6; background: #0f172a; }
+        .btn-tab { flex: 1; padding: 10px; font-size: 11px; font-weight: bold; text-transform: uppercase; color: #64748b; border-bottom: 2px solid transparent; transition: all 0.2s; }
+        .btn-tab.active { color: #3b82f6; border-bottom-color: #3b82f6; background: rgba(59, 130, 246, 0.1); }
     </style>
 </head>
 <body>
 
-<div id="root" class="w-full h-[100dvh] flex flex-col max-w-md mx-auto bg-white shadow-2xl relative overflow-hidden"></div>
+<div id="root"></div>
+
+<div id="error-display" style="display:none; position:fixed; inset:0; background:black; color:red; padding:20px; z-index:9999;">
+    <h2>System Error</h2>
+    <pre id="error-msg"></pre>
+    <button onclick="window.location.reload()" style="margin-top:20px; padding:10px; background:white; color:black;">Reload App</button>
+</div>
 
 <script>
-    if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-            navigator.serviceWorker.register('sw.js').then(
-                registration => console.log('SW Registered!', registration.scope),
-                err => console.log('SW Failed:', err)
-            );
-        });
-    }
+    window.onerror = function(msg, url, line) {
+        document.getElementById('error-display').style.display = 'block';
+        document.getElementById('error-msg').textContent = msg + "\nLine: " + line;
+    };
 </script>
 
 <script type="text/babel">
-const { useState, useEffect, useRef } = React;
+const { useState, useEffect, useRef, useMemo } = React;
 
 // --- ICONS ---
 const Icons = {
-    Menu: () => <svg width="24" height="24" fill="none" stroke="#1e293b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>,
-    Back: () => <svg width="24" height="24" fill="none" stroke="#1e293b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>,
-    Atom: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1"/><path d="M20.2 20.2c2.04-2.03.02-7.36-4.5-11.9-4.54-4.52-9.87-6.54-11.9-4.5-2.04 2.03-.02 7.36 4.5 11.9 4.54 4.52 9.87 6.54 11.9 4.5Z"/><path d="M15.7 15.7c4.52-4.54 6.54-9.87 4.5-11.9-2.03-2.04-7.36-.02-11.9 4.5-4.52 4.54-6.54 9.87-4.5 11.9 2.03 2.04 7.36.02 11.9-4.5Z"/></svg>,
-    Book: () => <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>,
-    Lab: () => <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M2 12h20"/><path d="M2 12l5-5"/><path d="M22 12l-5 5"/></svg>,
-    User: () => <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
-    Close: () => <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+    Menu: () => <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>,
+    Play: () => <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>,
+    Pause: () => <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>,
+    Reset: () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>,
+    Full: () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
 };
 
-// --- DATA ---
-const BOOKS = [
-    { id: 1, title: "Physics Concept Builder Vol 1", price: "₹450", link: "https://amzn.in/d/hCAUILC", desc: "For JEE Main & Advanced", color: "bg-orange-100 text-orange-800" },
-    { id: 2, title: "Advanced Problems in Physics", price: "₹650", link: "https://amzn.in/d/gSdEWNs", desc: "Problem Collection", color: "bg-blue-100 text-blue-800" },
-    { id: 3, title: "Digital Physics Interactive", price: "₹200", link: "https://play.google.com/store/books/details?id=dINYEQAAQBAJ", desc: "e-Book Edition", color: "bg-green-100 text-green-800" }
-];
+// --- 3D CAMERA CONTROLLER ---
+const useOrbitControls = (ref, initialZoom = 30) => {
+    const camera = useRef({ yaw: 0.5, pitch: 0.3, zoom: initialZoom });
+    const drag = useRef({ active: false, x: 0, y: 0 });
 
-const SIMS = [
-    { id: 'orbit', title: 'N-Body ODE Solver', desc: 'Coupled Differential Equations', color: 'bg-indigo-50 text-indigo-600' },
-    { id: 'pendulum', title: 'Pendulum (SHM)', desc: 'Oscillations', color: 'bg-pink-50 text-pink-600' },
-    { id: 'thermo', title: 'Thermodynamics', desc: 'Gas Laws', color: 'bg-orange-50 text-orange-600' },
-    { id: 'em', title: 'Electromagnetism', desc: 'Field Lines', color: 'bg-violet-50 text-violet-600' },
-    { id: 'optics', title: 'Speed of Light', desc: 'Relativity', color: 'bg-cyan-50 text-cyan-600' },
-];
+    useEffect(() => {
+        const el = ref.current;
+        if(!el) return;
 
-const PROFILE = { name: "Abhishek Kumar", role: "Physics Faculty (9+ yrs)", details: ["B.Tech (CSE)", "Ex-Faculty: Jaipuria School", "Ex-Faculty: S.P. College Pune", "Expert: Python, LaTeX"] };
+        const start = (e) => {
+            drag.current.active = true;
+            const t = e.touches ? e.touches[0] : e;
+            drag.current.x = t.clientX;
+            drag.current.y = t.clientY;
+        };
+        const move = (e) => {
+            if(!drag.current.active) return;
+            const t = e.touches ? e.touches[0] : e;
+            const dx = t.clientX - drag.current.x;
+            const dy = t.clientY - drag.current.y;
+            camera.current.yaw += dx * 0.01;
+            camera.current.pitch += dy * 0.01;
+            // Clamp pitch
+            camera.current.pitch = Math.max(-Math.PI/2 + 0.1, Math.min(Math.PI/2 - 0.1, camera.current.pitch));
+            drag.current.x = t.clientX;
+            drag.current.y = t.clientY;
+        };
+        const end = () => drag.current.active = false;
+        
+        el.addEventListener('mousedown', start); el.addEventListener('touchstart', start);
+        window.addEventListener('mousemove', move); window.addEventListener('touchmove', move);
+        window.addEventListener('mouseup', end); window.addEventListener('touchend', end);
 
-// --- NEW ADVANCED ODE SOLVER ENGINE ---
-
-// 1. PRESETS & MATH HELPERS
-const PRESETS = {
-    shm: { name: "Simple Harmonic (Spring)", mode: 'newtonian', x: "-4*x", y: "-4*y", z: "-4*z", setup: {x:3, y:2, z:0, vx:0, vy:0, vz:2} },
-    lorenz: { name: "Lorenz Attractor", mode: 'flow', x: "10*(y-x)", y: "x*(28-z)-y", z: "x*y - (8/3)*z", setup: {x:0.1, y:0, z:0, vx:0, vy:0, vz:0} },
-    rossler: { name: "Rössler Attractor", mode: 'flow', x: "-y-z", y: "x+0.2*y", z: "0.2 + z*(x-5.7)", setup: {x:0, y:0, z:0, vx:0, vy:0, vz:0} },
-    gravity: { name: "Orbit (Gravity)", mode: 'newtonian', x: "-100*x / (x^2+y^2)^1.5", y: "-100*y / (x^2+y^2)^1.5", z: "0", setup: {x:5, y:0, z:0, vx:0, vy:4.5, vz:0} }
+        return () => {
+            el.removeEventListener('mousedown', start); el.removeEventListener('touchstart', start);
+            window.removeEventListener('mousemove', move); window.removeEventListener('touchmove', move);
+            window.removeEventListener('mouseup', end); window.removeEventListener('touchend', end);
+        };
+    }, []);
+    return camera;
 };
 
-const parseEq = (eq) => {
-    if (!eq) return "0";
-    let s = eq.toLowerCase().replace(/\s/g, '');
-    s = s.replace(/\^/g, '**');
-    ['sin','cos','tan','sqrt','exp','log','abs','pi'].forEach(f => {
-        s = s.replaceAll(f, `Math.${f.toUpperCase() === 'PI' ? 'PI' : f}`);
-    });
-    return s;
+// --- MATH PARSER ---
+const parseMath = (str) => {
+    try {
+        if(!str) return "0";
+        let s = str.toLowerCase().replace(/\s/g,'');
+        s = s.replace(/\^/g, '**'); // Power
+        // Math functions
+        ['sin','cos','tan','sqrt','exp','log','abs','pi'].forEach(f => {
+            s = s.replaceAll(f, `Math.${f.toUpperCase()==='PI'?'PI':f}`);
+        });
+        return s;
+    } catch(e) { return "0"; }
 };
 
-// 2. SUB-COMPONENTS (Inputs, Graphs, Visualizer)
-const EqInput = ({ label, sub, val, set, color }) => (
-    <div className={`bg-slate-900 p-3 rounded border-l-2 ${color} flex flex-col gap-1`}>
-        <span className="text-[10px] font-bold text-slate-500 uppercase">{label}</span>
-        <div className="flex gap-2 items-center">
-            <span className="text-xs font-mono text-slate-400 shrink-0">{sub}</span>
-            <input value={val} onChange={e=>set(e.target.value)} className="input-field w-full rounded px-2 py-1 text-xs" spellCheck="false" />
-        </div>
-    </div>
-);
+// --- MAIN CANVAS COMPONENT ---
+const SimCanvas = ({ draw, initZoom=30 }) => {
+    const canvasRef = useRef(null);
+    const cam = useOrbitControls(canvasRef, initZoom);
 
-const GraphCard = ({ title, data, x, y, col }) => {
-    if(data.length < 2) return <div className="bg-slate-900 h-24 rounded border border-slate-800 flex items-center justify-center text-[10px] text-slate-600">No Data</div>;
-    const xs = data.map(d=>d[x]); const ys = data.map(d=>d[y]);
-    const minX = Math.min(...xs), maxX = Math.max(...xs);
-    const minY = Math.min(...ys), maxY = Math.max(...ys);
-    const pts = data.map(d => {
-        const px = ((d[x] - minX) / (maxX - minX || 1)) * 100;
-        const py = 100 - ((d[y] - minY) / (maxY - minY || 1)) * 100;
-        return `${px},${py}`;
-    }).join(' ');
+    useEffect(() => {
+        const cvs = canvasRef.current;
+        const ctx = cvs.getContext('2d');
+        let fid;
+
+        const render = () => {
+            const w = cvs.width = cvs.clientWidth;
+            const h = cvs.height = cvs.clientHeight;
+            const cx = w/2, cy = h/2;
+
+            ctx.fillStyle = '#020617'; // Dark Slate
+            ctx.fillRect(0,0,w,h);
+
+            // 3D Projection Function
+            const project = (x,y,z) => {
+                const { yaw, pitch, zoom } = cam.current;
+                // Rotate Y
+                let x1 = x * Math.cos(yaw) - z * Math.sin(yaw);
+                let z1 = z * Math.cos(yaw) + x * Math.sin(yaw);
+                // Rotate X
+                let y2 = y * Math.cos(pitch) - z1 * Math.sin(pitch);
+                let z2 = z1 * Math.cos(pitch) + y * Math.sin(pitch);
+                // Perspective
+                const scale = 500 / (500 - z2) * zoom;
+                return {
+                    x: cx + x1 * scale,
+                    y: cy - y2 * scale, // Invert Y for typical physics coords
+                    s: scale,
+                    z: z2
+                };
+            };
+
+            // Call specific simulation draw logic
+            if(draw) draw(ctx, project, w, h);
+
+            fid = requestAnimationFrame(render);
+        };
+        render();
+        return () => cancelAnimationFrame(fid);
+    }, [draw]);
+
+    return <canvas ref={canvasRef} className="w-full h-full block" />;
+};
+
+// --- APP ROOT ---
+const App = () => {
+    const [section, setSection] = useState('menu'); // menu, orbit, em, thermo
+    const [fullScreen, setFullScreen] = useState(false);
+
     return (
-        <div className="bg-slate-900 p-2 rounded border border-slate-800">
-            <div className="text-[10px] text-slate-400 mb-1">{title}</div>
-            <svg viewBox="0 0 100 100" className="w-full h-16 bg-slate-950/50 rounded overflow-hidden" preserveAspectRatio="none">
-                <polyline points={pts} fill="none" stroke={col} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
-            </svg>
+        <div className="flex flex-col h-full relative">
+            {/* HEADER */}
+            <div className="flex justify-between items-center p-4 bg-slate-900 border-b border-slate-800 z-50">
+                <button onClick={()=>setSection('menu')} className="flex items-center gap-2 text-white font-bold">
+                    <div className="bg-blue-600 p-1 rounded">P</div>
+                    <span>Abhishek Physics</span>
+                </button>
+            </div>
+
+            {/* CONTENT */}
+            <div className="flex-1 relative overflow-hidden bg-slate-50">
+                {section === 'menu' && <Menu setSection={setSection} />}
+                {section === 'orbit' && <OrbitLab setSection={setSection} fullScreen={fullScreen} setFullScreen={setFullScreen} />}
+                {section === 'em' && <EMLab setSection={setSection} fullScreen={fullScreen} setFullScreen={setFullScreen} />}
+                {section === 'thermo' && <ThermoLab setSection={setSection} fullScreen={fullScreen} setFullScreen={setFullScreen} />}
+            </div>
         </div>
     );
 };
 
-const Visualizer = ({ bodiesRef, historyRef, mode }) => {
-    const canvasRef = useRef(null);
-    useEffect(() => {
-        const cvs = canvasRef.current;
-        const ctx = cvs.getContext('2d');
-        let anim; let rot = 0;
-        const render = () => {
-            const w = cvs.width = cvs.clientWidth; const h = cvs.height = cvs.clientHeight;
-            const cx = w/2, cy = h/2; rot += 0.003;
-            ctx.fillStyle = '#020617'; ctx.fillRect(0, 0, w, h);
-            
-            const project = (x, y, z) => {
-                const x1 = x * Math.cos(rot) - z * Math.sin(rot);
-                const z1 = z * Math.cos(rot) + x * Math.sin(rot);
-                const zoom = mode === 'flow' ? 6 : 25;
-                const scale = 500 / (500 - z1); 
-                return { x: cx + x1 * zoom * scale, y: cy - y * zoom * scale, s: scale };
-            };
+// --- MENU COMPONENT ---
+const Menu = ({ setSection }) => (
+    <div className="p-6 space-y-4 max-w-md mx-auto">
+        <h2 className="text-xl font-bold text-slate-800">Select Laboratory</h2>
+        {[
+            { id:'orbit', title:'Orbital Dynamics', desc:'N-Body Gravity & ODEs', color:'bg-indigo-100 text-indigo-700' },
+            { id:'em', title:'Electromagnetism', desc:'Maxwell Fields & Lorentz Force', color:'bg-blue-100 text-blue-700' },
+            { id:'thermo', title:'Thermodynamics', desc:'Statistical Mechanics & Gas Laws', color:'bg-orange-100 text-orange-700' }
+        ].map(item => (
+            <button key={item.id} onClick={()=>setSection(item.id)} className="w-full p-4 bg-white rounded-xl shadow-sm border border-slate-200 flex items-center gap-4 hover:bg-slate-50 transition">
+                <div className={`w-12 h-12 rounded-lg flex items-center justify-center font-bold text-xl ${item.color}`}>{item.title[0]}</div>
+                <div className="text-left">
+                    <div className="font-bold text-slate-800">{item.title}</div>
+                    <div className="text-xs text-slate-500">{item.desc}</div>
+                </div>
+            </button>
+        ))}
+    </div>
+);
 
-            const hist = historyRef.current;
-            if (hist.length > 1) {
-                ctx.beginPath(); ctx.strokeStyle = mode === 'flow' ? '#f59e0b' : '#3b82f6';
-                ctx.lineWidth = mode === 'flow' ? 1 : 2; ctx.globalAlpha = 0.6;
-                for(let i=0; i<hist.length; i+=2) {
-                    const p = project(hist[i].x, hist[i].y, hist[i].z);
-                    if (i===0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
-                }
-                ctx.stroke(); ctx.globalAlpha = 1.0;
-            }
-
-            const b = bodiesRef.current[0]; const p = project(b.x, b.y, b.z);
-            const rad = Math.max(2, 8 * p.s);
-            const grad = ctx.createRadialGradient(p.x, p.y, rad*0.2, p.x, p.y, rad*3);
-            const col = mode === 'flow' ? '245, 158, 11' : '59, 130, 246';
-            grad.addColorStop(0, `rgba(${col}, 1)`); grad.addColorStop(1, `rgba(${col}, 0)`);
-            ctx.fillStyle = grad; ctx.globalCompositeOperation = 'screen';
-            ctx.beginPath(); ctx.arc(p.x, p.y, rad*3, 0, 7); ctx.fill();
-            ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = '#fff';
-            ctx.beginPath(); ctx.arc(p.x, p.y, rad*0.5, 0, 7); ctx.fill();
-            anim = requestAnimationFrame(render);
-        };
-        render(); return () => cancelAnimationFrame(anim);
-    }, [mode]);
-    return <canvas ref={canvasRef} className="w-full h-full block" />;
-};
-
-// 3. MAIN COMPONENT REPLACEMENT
-const ODESolver = () => {
-    const [fullScreen, setFullScreen] = useState(false);
-    const [tab, setTab] = useState('eq'); 
+// ==============================================================
+// 1. ORBITAL LAB (N-Body)
+// ==============================================================
+const OrbitLab = ({ fullScreen, setFullScreen }) => {
+    const [eqs, setEqs] = useState({ x:"-5*x", y:"-5*y", z:"-5*z" }); // Simple Harmonic default
+    const [bodies, setBodies] = useState([{x:2, y:0, z:0, vx:0, vy:2, vz:0.5, trail:[]}]);
     const [playing, setPlaying] = useState(true);
-    const [mode, setMode] = useState('newtonian');
-    const [eqs, setEqs] = useState({ x: PRESETS.shm.x, y: PRESETS.shm.y, z: PRESETS.shm.z });
-    const [dt, setDt] = useState(0.02);
     
-    const historyRef = useRef([]); 
-    const [displayData, setDisplayData] = useState([]); 
-    const bodiesRef = useRef([{ x: 3, y: 2, z: 0, vx: 0, vy: 0, vz: 2, ax: 0, ay: 0, az: 0 }]);
-    const timeRef = useRef(0);
-    const funcRef = useRef(null); 
-
+    // Physics Loop
     useEffect(() => {
+        if(!playing) return;
+        const dt = 0.02;
+        // Create function safely
+        let updateFunc;
         try {
-            const body = `return { fx: ${parseEq(eqs.x)}, fy: ${parseEq(eqs.y)}, fz: ${parseEq(eqs.z)} };`;
-            funcRef.current = new Function('x','y','z','vx','vy','vz','t', body);
-        } catch(e) { console.warn("Equation incomplete"); }
-    }, [eqs]);
+            updateFunc = new Function('x','y','z','t', `return { ax: ${parseMath(eqs.x)}, ay: ${parseMath(eqs.y)}, az: ${parseMath(eqs.z)} }`);
+        } catch(e) { return; }
 
-    const loadPreset = (key) => {
-        const p = PRESETS[key]; setMode(p.mode); setEqs({ x: p.x, y: p.y, z: p.z });
-        bodiesRef.current = [{ ...p.setup, ax:0, ay:0, az:0 }];
-        timeRef.current = 0; historyRef.current = []; setDisplayData([]);
-        setDt(p.mode === 'flow' ? 0.01 : 0.02);
-    };
-
-    useEffect(() => {
-        let frameId;
-        const loop = () => {
-            if (!playing || !funcRef.current) return;
-            const b = bodiesRef.current[0]; const t = timeRef.current; const calc = funcRef.current;
-
-            const evaluate = (x, y, z, vx, vy, vz, t) => {
-                const res = calc(x, y, z, vx, vy, vz, t);
-                if (mode === 'newtonian') return { dx: vx, dy: vy, dz: vz, dvx: res.fx, dvy: res.fy, dvz: res.fz }; 
-                else return { dx: res.fx, dy: res.fy, dz: res.fz, dvx: 0, dvy: 0, dvz: 0 }; 
-            };
-
-            try {
-                const k1 = evaluate(b.x, b.y, b.z, b.vx, b.vy, b.vz, t);
-                const k2 = evaluate(b.x+k1.dx*0.5*dt, b.y+k1.dy*0.5*dt, b.z+k1.dz*0.5*dt, b.vx+k1.dvx*0.5*dt, b.vy+k1.dvy*0.5*dt, b.vz+k1.dvz*0.5*dt, t+0.5*dt);
-                const k3 = evaluate(b.x+k2.dx*0.5*dt, b.y+k2.dy*0.5*dt, b.z+k2.dz*0.5*dt, b.vx+k2.dvx*0.5*dt, b.vy+k2.dvy*0.5*dt, b.vz+k2.dvz*0.5*dt, t+0.5*dt);
-                const k4 = evaluate(b.x+k3.dx*dt, b.y+k3.dy*dt, b.z+k3.dz*dt, b.vx+k3.dvx*dt, b.vy+k3.dvy*dt, b.vz+k3.dvz*dt, t+dt);
-
-                const nx = b.x + (dt/6)*(k1.dx + 2*k2.dx + 2*k3.dx + k4.dx);
-                const ny = b.y + (dt/6)*(k1.dy + 2*k2.dy + 2*k3.dy + k4.dy);
-                const nz = b.z + (dt/6)*(k1.dz + 2*k2.dz + 2*k3.dz + k4.dz);
-                const nvx = b.vx + (dt/6)*(k1.dvx + 2*k2.dvx + 2*k3.dvx + k4.dvx);
-                const nvy = b.vy + (dt/6)*(k1.dvy + 2*k2.dvy + 2*k3.dvy + k4.dvy);
-                const nvz = b.vz + (dt/6)*(k1.dvz + 2*k2.dvz + 2*k3.dvz + k4.dvz);
-
-                const acc = calc(nx, ny, nz, nvx, nvy, nvz, t+dt);
-                const newBody = { x: nx, y: ny, z: nz, vx: nvx, vy: nvy, vz: nvz, ax: acc.fx, ay: acc.fy, az: acc.fz };
-                bodiesRef.current = [newBody]; timeRef.current += dt;
-                historyRef.current.push(newBody);
-                if (historyRef.current.length > 1500) historyRef.current.shift();
-            } catch (err) { setPlaying(false); }
-            frameId = requestAnimationFrame(loop);
-        };
-        if(playing) loop(); return () => cancelAnimationFrame(frameId);
-    }, [playing, mode, dt]);
-
-    useEffect(() => {
         const id = setInterval(() => {
-            if(playing && historyRef.current.length > 0) {
-                const last = historyRef.current[historyRef.current.length-1];
-                setDisplayData(prev => {
-                    const nu = [...prev, { t: timeRef.current, ...last }];
-                    if(nu.length > 500) return nu.slice(-500); return nu;
-                });
-            }
-        }, 200);
+            setBodies(prev => prev.map(b => {
+                const acc = updateFunc(b.x, b.y, b.z, 0);
+                const vx = b.vx + acc.ax * dt;
+                const vy = b.vy + acc.ay * dt;
+                const vz = b.vz + acc.az * dt;
+                const x = b.x + vx * dt;
+                const y = b.y + vy * dt;
+                const z = b.z + vz * dt;
+                
+                const trail = [...b.trail, {x,y,z}];
+                if(trail.length > 100) trail.shift();
+                
+                return { ...b, x, y, z, vx, vy, vz, trail };
+            }));
+        }, 16);
         return () => clearInterval(id);
-    }, [playing]);
+    }, [playing, eqs]);
 
-    const downloadPDF = () => {
-        const doc = new jspdf.jsPDF(); doc.text(`Simulation Data: ${mode.toUpperCase()}`, 14, 15);
-        const rows = displayData.map(r => [r.t.toFixed(3), r.x.toFixed(4), r.y.toFixed(4), r.z.toFixed(4), r.vx.toFixed(4)]);
-        doc.autoTable({ head: [["Time", "X", "Y", "Z", "Velocity X"]], body: rows, startY: 20 });
-        doc.save("physics_data.pdf");
+    // Draw
+    const draw = (ctx, project) => {
+        bodies.forEach(b => {
+            // Trail
+            if(b.trail.length > 1) {
+                ctx.beginPath();
+                ctx.strokeStyle = '#3b82f6';
+                ctx.lineWidth = 2;
+                for(let i=0; i<b.trail.length; i++) {
+                    const p = project(b.trail[i].x, b.trail[i].y, b.trail[i].z);
+                    if(i===0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+                }
+                ctx.stroke();
+            }
+            // Body
+            const p = project(b.x, b.y, b.z);
+            ctx.fillStyle = '#fff';
+            ctx.beginPath(); ctx.arc(p.x, p.y, 6 * (p.s/20), 0, 7); ctx.fill();
+        });
     };
 
     return (
-        <div className={`flex flex-col h-[calc(100dvh-60px)] -m-4 relative ${fullScreen ? 'fixed inset-0 z-50 m-0 bg-slate-950' : ''}`}>
-            <div className={`relative transition-all duration-500 bg-slate-900 overflow-hidden shadow-xl z-20 ${fullScreen ? 'absolute inset-0 h-full' : 'h-[35%] shrink-0'}`}>
-                <Visualizer bodiesRef={bodiesRef} historyRef={historyRef} mode={mode} />
-                <div className="absolute top-4 right-4 flex items-center gap-3">
-                    <button onClick={() => { bodiesRef.current = [{x:0.1,y:0,z:0,vx:0,vy:0,vz:0}]; timeRef.current=0; historyRef.current=[]; setDisplayData([]); }} className="p-2 rounded-full bg-slate-800/80 text-slate-400 hover:text-white hover:bg-slate-700 backdrop-blur"><Icons.Close /></button>
-                    <button onClick={() => setPlaying(!playing)} className="p-2 rounded-full bg-blue-600/90 text-white shadow-lg hover:bg-blue-500 backdrop-blur">
-                        {playing ? <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> : <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>}
-                    </button>
-                    <button onClick={() => setFullScreen(!fullScreen)} className="p-2 rounded-full bg-slate-800/80 text-slate-400 hover:text-white hover:bg-slate-700 backdrop-blur">
-                         {fullScreen ? <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/></svg> : <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>}
-                    </button>
+        <div className="flex flex-col h-full">
+            <div className={`${fullScreen ? 'flex-1' : 'h-[40vh]'} relative`}>
+                <SimCanvas draw={draw} />
+                <OverlayControls playing={playing} setPlaying={setPlaying} fullScreen={fullScreen} setFullScreen={setFullScreen} reset={()=>{setBodies([{x:2,y:0,z:0,vx:0,vy:2,vz:0.5,trail:[]}])}} />
+            </div>
+            {!fullScreen && (
+                <div className="flex-1 bg-slate-900 p-4 overflow-y-auto border-t border-slate-800 space-y-4">
+                    <h3 className="text-xs font-bold text-blue-400 uppercase">Acceleration Equations</h3>
+                    <div className="space-y-2">
+                        <InputRow label="ax =" val={eqs.x} set={v=>setEqs({...eqs, x:v})} />
+                        <InputRow label="ay =" val={eqs.y} set={v=>setEqs({...eqs, y:v})} />
+                        <InputRow label="az =" val={eqs.z} set={v=>setEqs({...eqs, z:v})} />
+                    </div>
+                    <div className="text-[10px] text-slate-500">Try: -10*x / (x^2+y^2+z^2)^1.5 (Gravity)</div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+// ==============================================================
+// 2. ELECTROMAGNETISM LAB (Maxwell)
+// ==============================================================
+const EMLab = ({ fullScreen, setFullScreen }) => {
+    const [fields, setFields] = useState({ 
+        Ex: "0", Ey: "0", Ez: "0", 
+        Bx: "0", By: "0", Bz: "2" 
+    }); // Cyclotron default
+    const [body, setBody] = useState({x:0, y:0, z:0, vx:2, vy:0, vz:0.5, trail:[]});
+    const [playing, setPlaying] = useState(true);
+    const tRef = useRef(0);
+
+    useEffect(() => {
+        if(!playing) return;
+        const dt = 0.02;
+        let calcFields;
+        try {
+            const code = `return { 
+                Ex: ${parseMath(fields.Ex)}, Ey: ${parseMath(fields.Ey)}, Ez: ${parseMath(fields.Ez)},
+                Bx: ${parseMath(fields.Bx)}, By: ${parseMath(fields.By)}, Bz: ${parseMath(fields.Bz)}
+            }`;
+            calcFields = new Function('x','y','z','t', code);
+        } catch(e) { return; }
+
+        const id = setInterval(() => {
+            tRef.current += dt;
+            setBody(b => {
+                // Get Fields at current pos
+                const f = calcFields(b.x, b.y, b.z, tRef.current);
+                // Lorentz Force: F = q(E + v x B) (Assuming q=1, m=1)
+                const ax = f.Ex + (b.vy * f.Bz - b.vz * f.By);
+                const ay = f.Ey + (b.vz * f.Bx - b.vx * f.Bz);
+                const az = f.Ez + (b.vx * f.By - b.vy * f.Bx);
+
+                const vx = b.vx + ax * dt;
+                const vy = b.vy + ay * dt;
+                const vz = b.vz + az * dt;
+                
+                const trail = [...b.trail, {x:b.x, y:b.y, z:b.z}];
+                if(trail.length > 150) trail.shift();
+
+                return { 
+                    x: b.x+vx*dt, y: b.y+vy*dt, z: b.z+vz*dt, 
+                    vx, vy, vz, trail, 
+                    Ex: f.Ex, Ey: f.Ey, Ez: f.Ez, Bx: f.Bx, By: f.By, Bz: f.Bz 
+                };
+            });
+        }, 16);
+        return () => clearInterval(id);
+    }, [playing, fields]);
+
+    const draw = (ctx, project) => {
+        // Trail
+        if(body.trail.length > 1) {
+            ctx.beginPath(); ctx.strokeStyle = '#8b5cf6'; ctx.lineWidth = 2;
+            for(let i=0; i<body.trail.length; i+=2) {
+                const p = project(body.trail[i].x, body.trail[i].y, body.trail[i].z);
+                if(i===0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+            }
+            ctx.stroke();
+        }
+        // Particle
+        const p = project(body.x, body.y, body.z);
+        ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(p.x, p.y, 6, 0, 7); ctx.fill();
+
+        // Vectors (E=Yellow, B=Cyan, V=Green)
+        const drawVec = (vx, vy, vz, col, scale=1) => {
+            const end = project(body.x + vx*scale, body.y + vy*scale, body.z + vz*scale);
+            ctx.beginPath(); ctx.strokeStyle = col; ctx.lineWidth = 2;
+            ctx.moveTo(p.x, p.y); ctx.lineTo(end.x, end.y); ctx.stroke();
+            // Arrowhead
+            ctx.fillStyle = col; ctx.beginPath(); ctx.arc(end.x, end.y, 3, 0, 7); ctx.fill();
+        };
+        if(body.Ex!=null) {
+            drawVec(body.Ex, body.Ey, body.Ez, '#fbbf24', 1); // E
+            drawVec(body.Bx, body.By, body.Bz, '#22d3ee', 1); // B
+        }
+    };
+
+    return (
+        <div className="flex flex-col h-full">
+            <div className={`${fullScreen ? 'flex-1' : 'h-[45vh]'} relative`}>
+                <SimCanvas draw={draw} initZoom={25} />
+                <OverlayControls playing={playing} setPlaying={setPlaying} fullScreen={fullScreen} setFullScreen={setFullScreen} reset={()=>{setBody({x:0,y:0,z:0,vx:2,vy:0,vz:0.5,trail:[]}); tRef.current=0;}} />
+                <div className="absolute bottom-4 left-4 text-[10px] font-mono bg-black/60 p-2 rounded text-white backdrop-blur">
+                    <span className="text-yellow-400">Electric (E)</span> | <span className="text-cyan-400">Magnetic (B)</span>
                 </div>
             </div>
-
             {!fullScreen && (
-                <div className="flex-1 flex flex-col bg-slate-950 overflow-hidden">
-                    <div className="flex border-b border-slate-800 shrink-0">
-                        {['eq', 'table', 'graph'].map(id => (
-                            <button key={id} onClick={() => setTab(id)} className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-widest transition ${tab === id ? 'text-blue-400 bg-slate-900 border-b-2 border-blue-500' : 'text-slate-600 hover:text-slate-400'}`}>
-                                {id === 'eq' ? 'Equation' : id === 'table' ? 'Table' : 'Graph'}
-                            </button>
-                        ))}
+                <div className="flex-1 bg-slate-900 p-4 overflow-y-auto border-t border-slate-800">
+                    <div className="grid grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <h4 className="text-[10px] font-bold text-yellow-500 mb-2 uppercase">Electric Field</h4>
+                            <div className="space-y-2">
+                                <InputRow label="Ex" val={fields.Ex} set={v=>setFields({...fields, Ex:v})} />
+                                <InputRow label="Ey" val={fields.Ey} set={v=>setFields({...fields, Ey:v})} />
+                                <InputRow label="Ez" val={fields.Ez} set={v=>setFields({...fields, Ez:v})} />
+                            </div>
+                        </div>
+                        <div>
+                            <h4 className="text-[10px] font-bold text-cyan-500 mb-2 uppercase">Magnetic Field</h4>
+                            <div className="space-y-2">
+                                <InputRow label="Bx" val={fields.Bx} set={v=>setFields({...fields, Bx:v})} />
+                                <InputRow label="By" val={fields.By} set={v=>setFields({...fields, By:v})} />
+                                <InputRow label="Bz" val={fields.Bz} set={v=>setFields({...fields, Bz:v})} />
+                            </div>
+                        </div>
                     </div>
-                    <div className="flex-1 overflow-hidden relative">
-                        {tab === 'eq' && (
-                            <div className="h-full overflow-y-auto p-4 space-y-4 no-scrollbar">
-                                <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
-                                    {Object.entries(PRESETS).map(([k, v]) => (
-                                        <button key={k} onClick={() => loadPreset(k)} className="shrink-0 px-3 py-1 rounded border border-slate-700 text-[10px] font-bold text-slate-400 hover:bg-slate-800 hover:text-white transition">{v.name}</button>
-                                    ))}
-                                </div>
-                                <div className="grid gap-3">
-                                    <EqInput label="X-Axis Logic" sub={mode==='newtonian'?"x'' =":"x' ="} val={eqs.x} set={v=>setEqs({...eqs, x:v})} color="border-blue-500" />
-                                    <EqInput label="Y-Axis Logic" sub={mode==='newtonian'?"y'' =":"y' ="} val={eqs.y} set={v=>setEqs({...eqs, y:v})} color="border-purple-500" />
-                                    <EqInput label="Z-Axis Logic" sub={mode==='newtonian'?"z'' =":"z' ="} val={eqs.z} set={v=>setEqs({...eqs, z:v})} color="border-emerald-500" />
-                                </div>
-                                <div className="bg-slate-900 p-3 rounded border border-slate-800">
-                                    <div className="flex justify-between text-xs text-slate-500 mb-2"><span>Time Step (dt): {dt}</span></div>
-                                    <input type="range" min="0.001" max="0.1" step="0.001" value={dt} onChange={e=>setDt(parseFloat(e.target.value))} className="w-full h-1 bg-slate-700 rounded appearance-none accent-blue-500" />
-                                </div>
-                            </div>
-                        )}
-                        {tab === 'table' && (
-                            <div className="h-full flex flex-col">
-                                <div className="p-2 flex justify-between bg-slate-900 border-b border-slate-800">
-                                    <span className="text-[10px] text-slate-500 pt-1">Last 500 pts</span>
-                                    <button onClick={downloadPDF} className="bg-slate-800 text-white text-[10px] px-3 py-1 rounded hover:bg-slate-700 border border-slate-700">Download PDF</button>
-                                </div>
-                                <div className="flex-1 overflow-auto scroller">
-                                    <table className="data-table">
-                                        <thead><tr><th>T</th><th>X</th><th>Y</th><th>Vx</th><th>Vy</th><th>Ax</th></tr></thead>
-                                        <tbody>
-                                            {displayData.slice().reverse().map((r, i) => (
-                                                <tr key={i}>
-                                                    <td className="text-blue-400">{r.t.toFixed(3)}</td>
-                                                    <td>{r.x.toFixed(5)}</td>
-                                                    <td>{r.y.toFixed(5)}</td>
-                                                    <td>{r.vx.toFixed(4)}</td>
-                                                    <td>{r.vy.toFixed(4)}</td>
-                                                    <td className="text-slate-500">{r.ax ? r.ax.toFixed(2) : '-'}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        )}
-                        {tab === 'graph' && (
-                            <div className="h-full overflow-y-auto p-4 space-y-4 no-scrollbar">
-                                <div className="grid grid-cols-2 gap-3">
-                                    <GraphCard title="Orbit (X vs Y)" data={displayData} x="x" y="y" col="#3b82f6" />
-                                    <GraphCard title="Phase (X vs Vx)" data={displayData} x="x" y="vx" col="#a855f7" />
-                                    <GraphCard title="X vs Time" data={displayData} x="t" y="x" col="#10b981" />
-                                    <GraphCard title="Y vs Time" data={displayData} x="t" y="y" col="#ef4444" />
-                                </div>
-                            </div>
-                        )}
+                    <div className="text-[10px] text-slate-500">
+                        Presets: <button className="text-blue-400 hover:underline" onClick={()=>setFields({Ex:"0",Ey:"0",Ez:"0",Bx:"0",By:"0",Bz:"2"})}>Cyclotron</button>, 
+                        <button className="text-blue-400 hover:underline ml-2" onClick={()=>setFields({Ex:"0",Ey:"1",Ez:"0",Bx:"0",By:"0",Bz:"1"})}>Drift</button>,
+                        <button className="text-blue-400 hover:underline ml-2" onClick={()=>setFields({Ex:"cos(t-z)",Ey:"0",Ez:"0",Bx:"0",By:"cos(t-z)",Bz:"0"})}>EM Wave</button>
                     </div>
                 </div>
             )}
@@ -349,83 +414,158 @@ const ODESolver = () => {
     );
 };
 
-// --- OTHER SIMULATIONS (UNCHANGED) ---
-const SimCanvas = ({ type }) => {
-    const canvasRef = useRef(null);
-    useEffect(() => {
-        const canvas = canvasRef.current;
-        const ctx = canvas.getContext('2d');
-        let t = 0; let id;
-        const render = () => {
-            t++; const w = canvas.width = canvas.parentElement.clientWidth; const h = canvas.height = 240;
-            ctx.fillStyle = '#1e293b'; ctx.fillRect(0,0,w,h); const cx = w/2, cy = h/2;
-            if(type === 'pendulum') {
-                ctx.fillStyle = '#f8fafc'; ctx.fillRect(0,0,w,h); const ang = Math.sin(t*0.05) * Math.PI/4;
-                const bx = cx + 120*Math.sin(ang); const by = 20 + 120*Math.cos(ang);
-                ctx.beginPath(); ctx.moveTo(cx,20); ctx.lineTo(bx,by); ctx.strokeStyle='#475569'; ctx.stroke();
-                ctx.beginPath(); ctx.arc(bx, by, 12, 0, 7); ctx.fillStyle='#e11d48'; ctx.fill();
-            }
-            if(type === 'thermo') {
-                for(let i=0; i<30; i++) {
-                    const x = (Math.sin(t*0.01 + i)*0.5 + 0.5) * w; const y = (Math.cos(t*0.02 + i)*0.5 + 0.5) * h;
-                    ctx.beginPath(); ctx.arc(x,y,3,0,7); ctx.fillStyle=i%2?'#f97316':'#38bdf8'; ctx.fill();
-                }
-            }
-            if(type === 'em') {
-                ctx.strokeStyle='#ef4444'; for(let r=20; r<100; r+=20) { ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7); ctx.stroke(); }
-                const x = cx + 60*Math.cos(t*0.05); ctx.beginPath(); ctx.arc(x, cy, 8, 0, 7); ctx.fillStyle='#3b82f6'; ctx.fill();
-            }
-            if(type === 'optics') {
-                const lx = (t*10)%w; ctx.beginPath(); ctx.arc(lx, cy, 4, 0, 7); ctx.fillStyle='#facc15'; ctx.fill();
-                ctx.fillStyle='#fff'; ctx.fillText('Photon c', 10, cy-20);
-            }
-            id = requestAnimationFrame(render);
-        };
-        render(); return () => cancelAnimationFrame(id);
-    }, [type]);
-    return <div className="rounded-xl overflow-hidden mt-4 shadow-inner"><canvas ref={canvasRef} className="block w-full h-[240px]"/></div>;
-};
+// ==============================================================
+// 3. THERMODYNAMICS LAB (Large Volume)
+// ==============================================================
+const ThermoLab = ({ fullScreen, setFullScreen }) => {
+    const [forceEq, setForceEq] = useState("0"); // Ideal gas default
+    const [volume, setVolume] = useState(1.0);
+    const [particles, setParticles] = useState([]);
+    const [stats, setStats] = useState({P:0, T:0});
+    const [playing, setPlaying] = useState(true);
 
-const App = () => {
-    const [view, setView] = useState('home'); const [sim, setSim] = useState(null); const [menu, setMenu] = useState(false);
+    // Init
+    useEffect(() => {
+        const arr = [];
+        for(let i=0; i<80; i++) {
+            arr.push({
+                x: Math.random()*30, y: Math.random()*30, z: Math.random()*30,
+                vx: (Math.random()-0.5)*4, vy: (Math.random()-0.5)*4, vz: (Math.random()-0.5)*4,
+                color: i<40 ? '#ef4444' : '#3b82f6'
+            });
+        }
+        setParticles(arr);
+    }, []);
+
+    // Physics
+    useEffect(() => {
+        if(!playing) return;
+        let forceFunc;
+        try { forceFunc = new Function('r', `return ${parseMath(forceEq)}`); } catch(e) { return; }
+
+        const id = setInterval(() => {
+            const dt = 0.1;
+            const boxW = 50 * volume; const boxH = 50; const boxD = 50;
+            let impulse = 0;
+            let ke = 0;
+
+            setParticles(prev => {
+                // Clone to avoid mutating state directly
+                const next = prev.map(p => ({...p}));
+                
+                // 1. Inter-particle Forces (O(N^2) simplified)
+                if(forceEq !== "0") {
+                    for(let i=0; i<next.length; i++){
+                        for(let j=i+1; j<next.length; j++){
+                            const dx = next[j].x - next[i].x;
+                            const dy = next[j].y - next[i].y;
+                            const dz = next[j].z - next[i].z;
+                            const r2 = dx*dx + dy*dy + dz*dz;
+                            if(r2 < 64 && r2 > 0.1) {
+                                const r = Math.sqrt(r2);
+                                const f = forceFunc(r); // Magnitude
+                                const fx = f * dx/r; const fy = f * dy/r; const fz = f * dz/r;
+                                next[i].vx -= fx*dt; next[i].vy -= fy*dt; next[i].vz -= fz*dt;
+                                next[j].vx += fx*dt; next[j].vy += fy*dt; next[j].vz += fz*dt;
+                            }
+                        }
+                    }
+                }
+
+                // 2. Move & Collide Walls
+                next.forEach(p => {
+                    p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
+                    if(p.x < -boxW/2) { p.x = -boxW/2; p.vx *= -1; impulse += Math.abs(p.vx); }
+                    if(p.x > boxW/2) { p.x = boxW/2; p.vx *= -1; impulse += Math.abs(p.vx); }
+                    if(p.y < -boxH/2) { p.y = -boxH/2; p.vy *= -1; impulse += Math.abs(p.vy); }
+                    if(p.y > boxH/2) { p.y = boxH/2; p.vy *= -1; impulse += Math.abs(p.vy); }
+                    if(p.z < -boxD/2) { p.z = -boxD/2; p.vz *= -1; impulse += Math.abs(p.vz); }
+                    if(p.z > boxD/2) { p.z = boxD/2; p.vz *= -1; impulse += Math.abs(p.vz); }
+                    ke += (p.vx**2 + p.vy**2 + p.vz**2);
+                });
+                
+                // Update Stats occasionally
+                if(Math.random() > 0.8) {
+                    setStats({
+                        P: impulse / (dt * 100),
+                        T: ke / next.length
+                    });
+                }
+                return next;
+            });
+        }, 20);
+        return () => clearInterval(id);
+    }, [playing, forceEq, volume]);
+
+    const draw = (ctx, project) => {
+        // Draw Box (Large centered)
+        const w = 50*volume; const h = 50; const d = 50;
+        const corners = [
+            [-w/2,-h/2,-d/2], [w/2,-h/2,-d/2], [w/2,h/2,-d/2], [-w/2,h/2,-d/2],
+            [-w/2,-h/2,d/2], [w/2,-h/2,d/2], [w/2,h/2,d/2], [-w/2,h/2,d/2]
+        ].map(c => project(c[0], c[1], c[2]));
+
+        ctx.strokeStyle = '#475569'; ctx.lineWidth = 1;
+        const edges = [[0,1],[1,2],[2,3],[3,0], [4,5],[5,6],[6,7],[7,4], [0,4],[1,5],[2,6],[3,7]];
+        edges.forEach(e => {
+            ctx.beginPath(); ctx.moveTo(corners[e[0]].x, corners[e[0]].y); ctx.lineTo(corners[e[1]].x, corners[e[1]].y); ctx.stroke();
+        });
+
+        // Draw Particles
+        particles.forEach(p => {
+            const proj = project(p.x, p.y, p.z);
+            ctx.fillStyle = p.color;
+            ctx.beginPath(); ctx.arc(proj.x, proj.y, Math.max(2, 5*(proj.s/20)), 0, 7); ctx.fill();
+        });
+    };
+
     return (
-        <div className="flex flex-col h-full bg-slate-50">
-            <header className="bg-white border-b border-slate-200 px-4 py-3 flex justify-between items-center shrink-0 sticky top-0 z-20">
-                <div className="flex items-center gap-2" onClick={() => setView('home')}>
-                    <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold">P</div>
-                    <span className="font-bold text-slate-800">Physics</span>
-                </div>
-                <button onClick={() => setMenu(true)} className="p-2"><Icons.Menu /></button>
-            </header>
-            <div className={`fixed inset-0 z-50 bg-black/50 transition-opacity ${menu ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={() => setMenu(false)}>
-                <div className={`absolute right-0 top-0 bottom-0 w-72 bg-white shadow-2xl p-6 transition-transform duration-300 ${menu ? 'translate-x-0' : 'translate-x-full'}`} onClick={e => e.stopPropagation()}>
-                    <div className="flex justify-between items-center mb-8"><h2 className="font-bold text-xl">Profile</h2><button onClick={() => setMenu(false)}><Icons.Close /></button></div>
-                    <div className="text-center mb-6"><div className="w-20 h-20 bg-blue-100 text-blue-600 rounded-full mx-auto flex items-center justify-center mb-3"><Icons.User /></div><h3 className="font-bold text-lg text-slate-800">{PROFILE.name}</h3><p className="text-sm text-slate-500">{PROFILE.role}</p></div>
-                    <div className="space-y-3 text-sm text-slate-600">{PROFILE.details.map((d, i) => <div key={i} className="pl-3 border-l-2 border-blue-500">{d}</div>)}</div>
+        <div className="flex flex-col h-full">
+            <div className={`${fullScreen ? 'flex-1' : 'h-[50vh]'} relative`}>
+                <SimCanvas draw={draw} initZoom={15} />
+                <OverlayControls playing={playing} setPlaying={setPlaying} fullScreen={fullScreen} setFullScreen={setFullScreen} reset={()=>{}} />
+                <div className="absolute bottom-4 left-4 text-[10px] font-mono text-slate-400 flex gap-4 bg-black/50 p-2 rounded backdrop-blur">
+                    <span>Pres: {stats.P.toFixed(2)}</span>
+                    <span>Temp: {stats.T.toFixed(2)}</span>
+                    <span>Vol: {(volume*100).toFixed(0)}%</span>
                 </div>
             </div>
-            <main className="flex-1 overflow-y-auto no-scrollbar p-4 pb-24">
-                {view === 'home' && (
-                    <div className="space-y-6">
-                        <div className="bg-slate-900 text-white p-6 rounded-2xl relative overflow-hidden shadow-xl"><div className="relative z-10"><h1 className="text-2xl font-bold mb-1">Visual Labs</h1><p className="text-slate-400 text-sm">Interactive Physics for JEE</p></div><Icons.Atom className="absolute right-[-10px] bottom-[-10px] w-24 h-24 text-slate-700 opacity-50" /></div>
-                        <div><h3 className="font-bold text-slate-800 mb-3 text-sm uppercase tracking-wide">Experiments</h3><div className="space-y-3">{SIMS.map(s => (<button key={s.id} onClick={() => { setSim(s.id); setView('sim'); }} className="w-full bg-white p-4 rounded-xl border border-slate-100 shadow-sm flex items-center gap-4 text-left"><div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${s.color}`}><Icons.Atom /></div><div><div className="font-bold text-slate-900">{s.title}</div><div className="text-xs text-slate-500">{s.desc}</div></div></button>))}</div></div>
+            {!fullScreen && (
+                <div className="flex-1 bg-slate-900 p-4 overflow-y-auto border-t border-slate-800 space-y-4">
+                    <h3 className="text-xs font-bold text-orange-400 uppercase">Interaction Force F(r)</h3>
+                    <InputRow label="F =" val={forceEq} set={setForceEq} />
+                    <div className="text-[10px] text-slate-500">Positive = Repulsion. Try: 100/r^2 (Coulomb) or 12*((1/r)^13-(1/r)^7) (Lennard-Jones)</div>
+                    
+                    <div className="bg-slate-800 p-3 rounded">
+                        <div className="flex justify-between text-xs text-slate-400 mb-2"><span>Container Volume</span><span>{volume}x</span></div>
+                        <input type="range" min="0.5" max="2.0" step="0.1" value={volume} onChange={e=>setVolume(parseFloat(e.target.value))} className="w-full h-1 bg-slate-600 rounded appearance-none accent-blue-500"/>
                     </div>
-                )}
-                {view === 'sim' && (
-                    <div className="animate-in slide-in-from-bottom duration-300">
-                        <button onClick={() => setView('home')} className="flex items-center gap-2 text-slate-500 mb-4 font-bold text-sm"><Icons.Back /> Back</button>
-                        <h2 className="text-2xl font-bold text-slate-900 mb-2">{SIMS.find(s=>s.id===sim)?.title}</h2>
-                        {sim === 'orbit' ? <ODESolver /> : <SimCanvas type={sim} />}
-                        {sim !== 'orbit' && <div className="mt-4 p-4 bg-blue-50 border border-blue-100 rounded-xl text-sm text-blue-900"><strong>Note:</strong> Visualize the change. This simulation runs in real-time.</div>}
-                    </div>
-                )}
-                {view === 'books' && (<div className="space-y-4"><h2 className="font-bold text-xl text-slate-800">Study Material</h2>{BOOKS.map(b => (<div key={b.id} className="bg-white rounded-xl p-4 shadow-sm border border-slate-100 flex gap-4"><div className={`w-20 h-24 shrink-0 rounded flex items-center justify-center ${b.color}`}><Icons.Book /></div><div className="flex-1 flex flex-col"><h3 className="font-bold text-slate-900 leading-tight">{b.title}</h3><p className="text-xs text-slate-500 mt-1 mb-2">{b.desc}</p><div className="mt-auto flex justify-between items-center"><span className="text-xs font-bold bg-green-100 text-green-700 px-2 py-1 rounded">{b.price}</span><a href={b.link} target="_blank" className="text-xs font-bold bg-slate-900 text-white px-3 py-2 rounded">Buy Now</a></div></div></div>))}</div>)}
-            </main>
-            <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 h-16 flex justify-around items-center z-30 max-w-md mx-auto"><button onClick={() => setView('home')} className={`flex flex-col items-center gap-1 p-2 ${view!=='books'?'text-blue-600':'text-slate-400'}`}><Icons.Lab /><span className="text-[10px] font-bold">Labs</span></button><button onClick={() => setView('books')} className={`flex flex-col items-center gap-1 p-2 ${view==='books'?'text-blue-600':'text-slate-400'}`}><Icons.Book /><span className="text-[10px] font-bold">Books</span></button></nav>
+                </div>
+            )}
         </div>
     );
 };
-const root = ReactDOM.createRoot(document.getElementById('root')); root.render(<App />);
+
+// --- SHARED UI FRAGMENTS ---
+const OverlayControls = ({ playing, setPlaying, fullScreen, setFullScreen, reset }) => (
+    <div className="absolute top-4 right-4 flex items-center gap-2">
+        <button onClick={reset} className="p-2 bg-slate-800/80 text-white rounded-full hover:bg-slate-700 backdrop-blur"><Icons.Reset/></button>
+        <button onClick={()=>setPlaying(!playing)} className="p-2 bg-blue-600/90 text-white rounded-full shadow-lg hover:bg-blue-500 backdrop-blur">
+            {playing ? <Icons.Pause/> : <Icons.Play/>}
+        </button>
+        <button onClick={()=>setFullScreen(!fullScreen)} className="p-2 bg-slate-800/80 text-white rounded-full hover:bg-slate-700 backdrop-blur"><Icons.Full/></button>
+    </div>
+);
+
+const InputRow = ({ label, val, set }) => (
+    <div className="flex items-center gap-2 bg-slate-950 border border-slate-800 rounded px-2 py-1">
+        <span className="text-xs font-mono text-slate-400 shrink-0">{label}</span>
+        <input className="eq-input" value={val} onChange={e=>set(e.target.value)} spellCheck="false"/>
+    </div>
+);
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+window.onload = () => root.render(<App />);
 </script>
 </body>
 </html>
