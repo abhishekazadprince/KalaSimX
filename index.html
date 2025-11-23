@@ -6,12 +6,10 @@
     <meta name="theme-color" content="#ffffff">
     <meta name="mobile-web-app-capable" content="yes">
     
-    <!-- LINK TO MANIFEST (CRITICAL) -->
     <link rel="manifest" href="manifest.json">
     
     <title>Abhishek Physics</title>
     
-    <!-- React & Tailwind Engines -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -27,7 +25,6 @@
 
 <div id="root" class="w-full h-[100dvh] flex flex-col max-w-md mx-auto bg-white shadow-2xl relative overflow-hidden"></div>
 
-<!-- SERVICE WORKER REGISTRATION -->
 <script>
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
@@ -39,7 +36,6 @@
     }
 </script>
 
-<!-- REACT APP CODE -->
 <script type="text/babel">
 const { useState, useEffect, useRef } = React;
 
@@ -62,7 +58,7 @@ const BOOKS = [
 ];
 
 const SIMS = [
-    { id: 'orbit', title: 'Planetary Motion', desc: 'Kepler\'s Laws', color: 'bg-indigo-50 text-indigo-600' },
+    { id: 'orbit', title: 'N-Body ODE Solver', desc: 'Coupled Differential Equations', color: 'bg-indigo-50 text-indigo-600' },
     { id: 'pendulum', title: 'Pendulum (SHM)', desc: 'Oscillations', color: 'bg-pink-50 text-pink-600' },
     { id: 'thermo', title: 'Thermodynamics', desc: 'Gas Laws', color: 'bg-orange-50 text-orange-600' },
     { id: 'em', title: 'Electromagnetism', desc: 'Field Lines', color: 'bg-violet-50 text-violet-600' },
@@ -71,7 +67,207 @@ const SIMS = [
 
 const PROFILE = { name: "Abhishek Kumar", role: "Physics Faculty (9+ yrs)", details: ["B.Tech (CSE)", "Ex-Faculty: Jaipuria School", "Ex-Faculty: S.P. College Pune", "Expert: Python, LaTeX"] };
 
-// --- SIMULATION ENGINE ---
+// --- ODE SOLVER COMPONENT ---
+const ODESolver = () => {
+    // Parameters
+    const [params, setParams] = useState({ G: 0.5, dt: 0.1 });
+    const [data, setData] = useState({ bodies: [], energyHistory: [] });
+    const canvasRef = useRef(null);
+    
+    // Physics Engine State (Kept in ref for high-performance loop)
+    const simRef = useRef({
+        bodies: [
+            { id: 'Y', x: 200, y: 80, vx: 1.5, vy: 0, mass: 30, color: '#eab308', trail: [] }, // Yellow
+            { id: 'B', x: 150, y: 140, vx: -0.5, vy: -1, mass: 25, color: '#2563eb', trail: [] }, // Blue
+            { id: 'G', x: 160, y: 160, vx: 0, vy: 1, mass: 20, color: '#22c55e', trail: [] }, // Green
+            { id: 'R', x: 220, y: 180, vx: -1, vy: 0.5, mass: 35, color: '#dc2626', trail: [] } // Red
+        ],
+        energyHistory: new Array(50).fill(0)
+    });
+
+    useEffect(() => {
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext('2d');
+        let frameId;
+        let frameCount = 0;
+
+        const updatePhysics = () => {
+            const { bodies, energyHistory } = simRef.current;
+            const { G, dt } = params;
+
+            // 1. Calculate Forces (Newton's Gravity)
+            const forces = bodies.map(() => ({ fx: 0, fy: 0 }));
+            for (let i = 0; i < bodies.length; i++) {
+                for (let j = i + 1; j < bodies.length; j++) {
+                    const dx = bodies[j].x - bodies[i].x;
+                    const dy = bodies[j].y - bodies[i].y;
+                    const distSq = dx*dx + dy*dy;
+                    const dist = Math.sqrt(distSq);
+                    const f = (G * bodies[i].mass * bodies[j].mass) / (distSq + 100); // +100 to avoid singularity
+                    const fx = f * (dx / dist);
+                    const fy = f * (dy / dist);
+                    
+                    forces[i].fx += fx; forces[i].fy += fy;
+                    forces[j].fx -= fx; forces[j].fy -= fy;
+                }
+            }
+
+            // 2. Update Position & Velocity (Euler Integration)
+            let totalKE = 0;
+            bodies.forEach((b, i) => {
+                const ax = forces[i].fx / b.mass;
+                const ay = forces[i].fy / b.mass;
+                b.vx += ax * dt;
+                b.vy += ay * dt;
+                b.x += b.vx * dt;
+                b.y += b.vy * dt;
+
+                // Boundary bounce (soft)
+                if(b.x < 0 || b.x > canvas.width) b.vx *= -0.9;
+                if(b.y < 0 || b.y > canvas.height) b.vy *= -0.9;
+                b.x = Math.max(0, Math.min(canvas.width, b.x));
+                b.y = Math.max(0, Math.min(canvas.height, b.y));
+
+                // Trail
+                if(frameCount % 3 === 0) {
+                    b.trail.push({x: b.x, y: b.y});
+                    if(b.trail.length > 20) b.trail.shift();
+                }
+
+                totalKE += 0.5 * b.mass * (b.vx*b.vx + b.vy*b.vy);
+            });
+
+            // Update Energy Graph Data
+            if(frameCount % 5 === 0) {
+                energyHistory.push(totalKE);
+                if(energyHistory.length > 50) energyHistory.shift();
+            }
+        };
+
+        const render = () => {
+            frameCount++;
+            // Adjust canvas size
+            if(canvas.width !== canvas.parentElement.clientWidth) {
+                canvas.width = canvas.parentElement.clientWidth;
+                canvas.height = 300;
+            }
+            
+            updatePhysics();
+
+            // --- 1. RENDER: MOTION (Video-like) ---
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            const bodies = simRef.current.bodies;
+            bodies.forEach(b => {
+                // Draw Trail
+                ctx.beginPath();
+                b.trail.forEach((t, i) => {
+                    ctx.lineTo(t.x, t.y);
+                });
+                ctx.strokeStyle = b.color;
+                ctx.globalAlpha = 0.4;
+                ctx.stroke();
+                ctx.globalAlpha = 1.0;
+
+                // Draw Body
+                ctx.beginPath();
+                const r = Math.sqrt(b.mass) * 2; // Radius based on mass
+                ctx.arc(b.x, b.y, r, 0, Math.PI * 2);
+                ctx.fillStyle = b.color;
+                
+                // Shading to look like 3D spheres (like video)
+                const grad = ctx.createRadialGradient(b.x - r/3, b.y - r/3, r/4, b.x, b.y, r);
+                grad.addColorStop(0, '#fff');
+                grad.addColorStop(1, b.color);
+                ctx.fillStyle = grad;
+                ctx.fill();
+            });
+
+            // Sync React State for Table/Graph (throttled)
+            if(frameCount % 10 === 0) {
+                setData({ 
+                    bodies: [...simRef.current.bodies], 
+                    energyHistory: [...simRef.current.energyHistory] 
+                });
+            }
+
+            frameId = requestAnimationFrame(render);
+        };
+
+        render();
+        return () => cancelAnimationFrame(frameId);
+    }, [params]);
+
+    // Helper to scale Graph
+    const maxE = Math.max(...data.energyHistory, 1);
+    const minE = Math.min(...data.energyHistory, 0);
+    const norm = (v) => 50 - ((v - minE) / (maxE - minE || 1)) * 50;
+
+    return (
+        <div className="space-y-4 animate-in fade-in">
+            
+            {/* CONTROLS */}
+            <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm grid grid-cols-2 gap-4">
+                <div>
+                    <label className="text-xs font-bold text-slate-500 block mb-1">Gravity (G): {params.G}</label>
+                    <input type="range" min="0.1" max="2.0" step="0.1" value={params.G} onChange={e=>setParams({...params, G: parseFloat(e.target.value)})} className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer" />
+                </div>
+                <div>
+                    <label className="text-xs font-bold text-slate-500 block mb-1">Time Step (dt): {params.dt}</label>
+                    <input type="range" min="0.05" max="0.5" step="0.01" value={params.dt} onChange={e=>setParams({...params, dt: parseFloat(e.target.value)})} className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer" />
+                </div>
+            </div>
+
+            {/* SOLUTION 1: MOTION VISUALIZATION */}
+            <div className="relative rounded-xl overflow-hidden shadow-lg border border-slate-800">
+                <div className="absolute top-2 left-2 px-2 py-1 bg-black/50 backdrop-blur text-white text-[10px] rounded font-mono">SOL 1: MOTION</div>
+                <canvas ref={canvasRef} className="block w-full h-[300px] bg-black"/>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4">
+                {/* SOLUTION 2: GRAPHICAL (Energy vs Time) */}
+                <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+                    <div className="flex justify-between mb-2"><span className="text-xs font-bold text-slate-600">SOL 2: SYSTEM ENERGY</span><span className="text-[10px] text-slate-400">Kinetic Energy vs Time</span></div>
+                    <div className="h-[60px] w-full border-b border-l border-slate-200 relative">
+                        <svg className="w-full h-full overflow-visible" preserveAspectRatio="none" viewBox="0 0 50 50">
+                            <polyline 
+                                fill="none" 
+                                stroke="#3b82f6" 
+                                strokeWidth="2" 
+                                points={data.energyHistory.map((e, i) => `${i},${norm(e)}`).join(' ')} 
+                            />
+                        </svg>
+                    </div>
+                </div>
+
+                {/* SOLUTION 3: NUMERICAL TABLE */}
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div className="bg-slate-50 px-3 py-2 border-b border-slate-200 flex justify-between"><span className="text-xs font-bold text-slate-600">SOL 3: NUMERICAL DATA</span><span className="text-[10px] text-slate-400 font-mono">Live ODE Output</span></div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-[10px] text-left">
+                            <thead className="bg-slate-50 text-slate-500">
+                                <tr><th className="p-2">Body</th><th className="p-2">Pos X</th><th className="p-2">Pos Y</th><th className="p-2">Vel V</th></tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                                {data.bodies.map((b) => (
+                                    <tr key={b.id}>
+                                        <td className="p-2 font-bold" style={{color: b.color}}>{b.id}</td>
+                                        <td className="p-2 font-mono text-slate-600">{b.x.toFixed(1)}</td>
+                                        <td className="p-2 font-mono text-slate-600">{b.y.toFixed(1)}</td>
+                                        <td className="p-2 font-mono text-slate-600">{Math.sqrt(b.vx*b.vx + b.vy*b.vy).toFixed(2)}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// --- OTHER SIMULATIONS (UNCHANGED) ---
 const SimCanvas = ({ type }) => {
     const canvasRef = useRef(null);
     useEffect(() => {
@@ -81,11 +277,9 @@ const SimCanvas = ({ type }) => {
         const render = () => {
             t++; const w = canvas.width = canvas.parentElement.clientWidth; const h = canvas.height = 240;
             ctx.fillStyle = '#1e293b'; ctx.fillRect(0,0,w,h); const cx = w/2, cy = h/2;
+            // 'orbit' logic moved to ODESolver, kept here just as fallback/placeholder
             if(type === 'orbit') {
-                ctx.beginPath(); ctx.arc(cx, cy, 15, 0, 7); ctx.fillStyle='#fbbf24'; ctx.fill();
-                ctx.beginPath(); ctx.ellipse(cx, cy, 100, 60, 0, 0, 7); ctx.strokeStyle='#334155'; ctx.stroke();
-                const px = cx + 100 * Math.cos(t*0.02); const py = cy + 60 * Math.sin(t*0.02);
-                ctx.beginPath(); ctx.arc(px, py, 6, 0, 7); ctx.fillStyle='#38bdf8'; ctx.fill();
+                ctx.fillStyle='#fff'; ctx.fillText('Running Advanced ODE Solver...', 20, 30);
             }
             if(type === 'pendulum') {
                 ctx.fillStyle = '#f8fafc'; ctx.fillRect(0,0,w,h); const ang = Math.sin(t*0.05) * Math.PI/4;
@@ -141,7 +335,16 @@ const App = () => {
                         <div><h3 className="font-bold text-slate-800 mb-3 text-sm uppercase tracking-wide">Experiments</h3><div className="space-y-3">{SIMS.map(s => (<button key={s.id} onClick={() => { setSim(s.id); setView('sim'); }} className="w-full bg-white p-4 rounded-xl border border-slate-100 shadow-sm flex items-center gap-4 text-left"><div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${s.color}`}><Icons.Atom /></div><div><div className="font-bold text-slate-900">{s.title}</div><div className="text-xs text-slate-500">{s.desc}</div></div></button>))}</div></div>
                     </div>
                 )}
-                {view === 'sim' && (<div className="animate-in slide-in-from-bottom duration-300"><button onClick={() => setView('home')} className="flex items-center gap-2 text-slate-500 mb-4 font-bold text-sm"><Icons.Back /> Back</button><h2 className="text-2xl font-bold text-slate-900 mb-2">{SIMS.find(s=>s.id===sim)?.title}</h2><SimCanvas type={sim} /><div className="mt-4 p-4 bg-blue-50 border border-blue-100 rounded-xl text-sm text-blue-900"><strong>Note:</strong> Visualize the change. This simulation runs in real-time.</div></div>)}
+                {view === 'sim' && (
+                    <div className="animate-in slide-in-from-bottom duration-300">
+                        <button onClick={() => setView('home')} className="flex items-center gap-2 text-slate-500 mb-4 font-bold text-sm"><Icons.Back /> Back</button>
+                        <h2 className="text-2xl font-bold text-slate-900 mb-2">{SIMS.find(s=>s.id===sim)?.title}</h2>
+                        {/* MODIFIED: Load dedicated ODESolver for orbit, generic SimCanvas for others */}
+                        {sim === 'orbit' ? <ODESolver /> : <SimCanvas type={sim} />}
+                        
+                        {sim !== 'orbit' && <div className="mt-4 p-4 bg-blue-50 border border-blue-100 rounded-xl text-sm text-blue-900"><strong>Note:</strong> Visualize the change. This simulation runs in real-time.</div>}
+                    </div>
+                )}
                 {view === 'books' && (<div className="space-y-4"><h2 className="font-bold text-xl text-slate-800">Study Material</h2>{BOOKS.map(b => (<div key={b.id} className="bg-white rounded-xl p-4 shadow-sm border border-slate-100 flex gap-4"><div className={`w-20 h-24 shrink-0 rounded flex items-center justify-center ${b.color}`}><Icons.Book /></div><div className="flex-1 flex flex-col"><h3 className="font-bold text-slate-900 leading-tight">{b.title}</h3><p className="text-xs text-slate-500 mt-1 mb-2">{b.desc}</p><div className="mt-auto flex justify-between items-center"><span className="text-xs font-bold bg-green-100 text-green-700 px-2 py-1 rounded">{b.price}</span><a href={b.link} target="_blank" className="text-xs font-bold bg-slate-900 text-white px-3 py-2 rounded">Buy Now</a></div></div></div>))}</div>)}
             </main>
             <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 h-16 flex justify-around items-center z-30 max-w-md mx-auto"><button onClick={() => setView('home')} className={`flex flex-col items-center gap-1 p-2 ${view!=='books'?'text-blue-600':'text-slate-400'}`}><Icons.Lab /><span className="text-[10px] font-bold">Labs</span></button><button onClick={() => setView('books')} className={`flex flex-col items-center gap-1 p-2 ${view==='books'?'text-blue-600':'text-slate-400'}`}><Icons.Book /><span className="text-[10px] font-bold">Books</span></button></nav>
