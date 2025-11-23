@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#020617">
+    <meta name="mobile-web-app-capable" content="yes">
+    
+    <!-- LINK TO MANIFEST -->
+    <link rel="manifest" href="manifest.json">
+    
+    <title>KalaSimX</title>
+    
+    <!-- React & Tailwind Engines -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <style>
+        /* Custom Scrollbar & Base Styles */
+        body { -webkit-tap-highlight-color: transparent; user-select: none; font-family: 'Segoe UI', sans-serif; background-color: #020617; overscroll-behavior-y: none; color: #e2e8f0; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        canvas { touch-action: none; }
+        
+        /* Math Formatting */
+        .math-eq { font-family: 'Times New Roman', serif; font-style: italic; }
+        .var-t { color: #fbbf24; font-weight: bold; } /* Highlighting time variable */
+    </style>
+</head>
+<body>
+
+<div id="root" class="w-full h-[100dvh] flex flex-col max-w-md mx-auto bg-slate-950 shadow-2xl relative overflow-hidden text-slate-200"></div>
+
+<!-- SERVICE WORKER REGISTRATION -->
+<script>
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('sw.js').then(
+                registration => console.log('SW Registered!', registration.scope),
+                err => console.log('SW Failed:', err)
+            );
+        });
+    }
+</script>
+
+<!-- REACT APP CODE -->
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+// --- ICONS ---
+const Icons = {
+    Menu: () => <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>,
+    Back: () => <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>,
+    Atom: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>,
+    Math: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>,
+    Time: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
+    User: () => <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
+    Close: () => <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+};
+
+// --- CONTENT DATA (JEE ADVANCED + KALA THEME) ---
+const PHYSICS_SECTIONS = [
+    {
+        id: 'mech', title: 'Classical Mechanics', icon: '⚙️',
+        concepts: [
+            { 
+                name: 'Kinematics (Time Evolution)', 
+                eq: 'x(t) = x₀ + v₀t + ½at²', 
+                desc: 'Position evolves as a quadratic function of time under constant acceleration.',
+                params: [{s:'t', d:'Time variable (The flow)'}, {s:'x(t)', d:'Position at instant t'}, {s:'a', d:'Acceleration (Rate of change of velocity)'}]
+            },
+            {
+                name: 'Newton\'s 2nd Law (Momentum)',
+                eq: 'F(t) = dp(t)/dt',
+                desc: 'Force is the instantaneous rate of change of momentum with respect to time.',
+                params: [{s:'dp/dt', d:'Time derivative of momentum'}, {s:'F(t)', d:'Force applied at time t'}]
+            }
+        ]
+    },
+    {
+        id: 'waves', title: 'Waves & Oscillations', icon: '〰️',
+        concepts: [
+            {
+                name: 'SHM Time Equation',
+                eq: 'x(t) = A cos(ωt + φ)',
+                desc: 'A particle oscillates between limits defined by Amplitude A.',
+                params: [{s:'t', d:'Instantaneous Time'}, {s:'ω', d:'Angular Frequency (2π/T)'}, {s:'φ', d:'Phase constant (Initial state)'}]
+            },
+            {
+                name: 'Traveling Wave',
+                eq: 'y(x,t) = A sin(kx - ωt)',
+                desc: 'Disturbance propagates through space x and time t.',
+                params: [{s:'ωt', d:'Time phase component'}, {s:'k', d:'Wave Number'}]
+            }
+        ]
+    },
+    {
+        id: 'thermo', title: 'Thermodynamics', icon: '🔥',
+        concepts: [
+            {
+                name: 'Heat Flow Rate',
+                eq: 'dQ/dt = -KA (dT/dx)',
+                desc: 'The rate of heat energy transfer per unit time.',
+                params: [{s:'dQ/dt', d:'Power (Energy per unit time)'}, {s:'K', d:'Thermal Conductivity'}]
+            }
+        ]
+    },
+    {
+        id: 'em', title: 'Electromagnetism', icon: '⚡',
+        concepts: [
+            {
+                name: 'Faraday\'s Law',
+                eq: 'ε = -dΦ_B/dt',
+                desc: 'Changing magnetic flux with time induces an EMF.',
+                params: [{s:'dΦ/dt', d:'Rate of change of flux over time'}, {s:'ε', d:'Induced EMF'}]
+            },
+            {
+                name: 'LC Oscillations',
+                eq: 'd²q/dt² + (1/LC)q = 0',
+                desc: 'Charge oscillates in a circuit like a mass on a spring.',
+                params: [{s:'L, C', d:'Inductance and Capacitance'}, {s:'t', d:'Time'}]
+            }
+        ]
+    },
+    {
+        id: 'modern', title: 'Modern Physics', icon: '⚛️',
+        concepts: [
+            {
+                name: 'Radioactive Decay',
+                eq: 'N(t) = N₀ e^(-λt)',
+                desc: 'Nuclei population decays exponentially with time.',
+                params: [{s:'t', d:'Elapsed time'}, {s:'λ', d:'Decay constant'}, {s:'N(t)', d:'Nuclei remaining'}]
+            }
+        ]
+    }
+];
+
+const MATH_SECTIONS = [
+    {
+        id: 'diff_eq', title: 'Differential Equations', icon: '∫',
+        concepts: [
+            {
+                name: 'Rate of Change',
+                eq: 'dy/dt = ky',
+                desc: 'The fundamental equation where growth depends on current size.',
+                params: [{s:'dy/dt', d:'Instantaneous change w.r.t time'}, {s:'k', d:'Proportionality constant'}]
+            },
+            {
+                name: 'Newton\'s Cooling',
+                eq: 'dT/dt = -k(T - T_env)',
+                desc: 'Temperature change rate is proportional to difference.',
+                params: [{s:'dT/dt', d:'Cooling rate over time'}]
+            }
+        ]
+    },
+    {
+        id: 'vectors', title: 'Vectors & Trigonometry', icon: '📐',
+        concepts: [
+            {
+                name: 'Rotating Vectors (Phasors)',
+                eq: 'r(t) = R[cos(ωt)î + sin(ωt)ĵ]',
+                desc: 'A vector rotating in time, basis of AC circuits.',
+                params: [{s:'ωt', d:'Angle at time t'}, {s:'R', d:'Magnitude'}]
+            }
+        ]
+    },
+    {
+        id: 'astro', title: 'Indian Astronomy (Kala)', icon: '🕉️',
+        concepts: [
+            {
+                name: 'Time Measures',
+                eq: '1 Ghati = 24 Minutes',
+                desc: 'Ancient Vedic time division. 60 Ghatis = 1 Day (Ahorkratra).',
+                params: [{s:'Ghati', d:'Unit of Time'}, {s:'Vighati', d:'24 Seconds'}]
+            },
+            {
+                name: 'Surya Siddhanta',
+                eq: 'θ(t) = ω_mean t + Equation of Center',
+                desc: 'Calculating true planetary positions based on mean time.',
+                params: [{s:'t', d:'Elapsed time since epoch'}]
+            }
+        ]
+    }
+];
+
+const PROFILE = { 
+    name: "Abhishek Physics", 
+    role: "KalaSimX Admin", 
+    details: ["JEE Advanced Specialist", "Computational Physics", "Ancient Indian Mathematics"] 
+};
+
+// --- SIMULATION ENGINE (Unchanged logic, styled for KalaSimX) ---
+const SimCanvas = ({ type }) => {
+    const canvasRef = useRef(null);
+    useEffect(() => {
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext('2d');
+        let t = 0; let id;
+        const render = () => {
+            t++; const w = canvas.width = canvas.parentElement.clientWidth; const h = canvas.height = 220;
+            // Cosmic Background
+            ctx.fillStyle = '#0f172a'; ctx.fillRect(0,0,w,h); 
+            
+            // Stars
+            for(let i=0; i<20; i++) {
+                ctx.fillStyle = Math.random() > 0.9 ? '#fbbf24' : '#334155';
+                ctx.fillRect(Math.random()*w, Math.random()*h, 1, 1);
+            }
+
+            const cx = w/2, cy = h/2;
+            
+            if(type === 'mech') {
+                // Projectile with time trail
+                const v0 = 60, theta = 1.2; // rad
+                const grav = 0.2;
+                const time = (t % 600) * 0.1;
+                const px = 20 + v0 * Math.cos(theta) * time;
+                const py = h - 20 - (v0 * Math.sin(theta) * time - 0.5 * grav * time * time);
+                
+                if(py < h-20) {
+                    ctx.beginPath(); ctx.arc(px, py, 5, 0, 7); ctx.fillStyle='#fbbf24'; ctx.fill(); // Gold particle
+                    ctx.fillStyle='#fff'; ctx.fillText(`t = ${time.toFixed(1)}`, px+10, py);
+                }
+            }
+            
+            if(type === 'waves') {
+                ctx.strokeStyle = '#fbbf24'; ctx.lineWidth = 2; ctx.beginPath();
+                for(let i=0; i<w; i++) {
+                    ctx.lineTo(i, cy + 40 * Math.sin(i*0.05 - t*0.1));
+                }
+                ctx.stroke();
+                ctx.fillStyle='#94a3b8'; ctx.fillText('y(x,t)', 10, 20);
+            }
+
+            if(type === 'astro') {
+                // Sun Center
+                ctx.beginPath(); ctx.arc(cx, cy, 10, 0, 7); ctx.fillStyle='#fbbf24'; ctx.fill();
+                // Earth Orbit
+                ctx.beginPath(); ctx.ellipse(cx, cy, 80, 40, 0, 0, 7); ctx.strokeStyle='#475569'; ctx.stroke();
+                // Earth
+                const ex = cx + 80 * Math.cos(t*0.02); const ey = cy + 40 * Math.sin(t*0.02);
+                ctx.beginPath(); ctx.arc(ex, ey, 5, 0, 7); ctx.fillStyle='#38bdf8'; ctx.fill();
+                ctx.strokeStyle='rgba(255,255,255,0.2)'; ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(ex,ey); ctx.stroke();
+            }
+
+            id = requestAnimationFrame(render);
+        };
+        render(); return () => cancelAnimationFrame(id);
+    }, [type]);
+    return <div className="rounded-lg overflow-hidden mt-4 border border-slate-800 shadow-lg shadow-amber-900/10"><canvas ref={canvasRef} className="block w-full h-[220px]"/></div>;
+};
+
+// --- COMPONENTS ---
+const SectionCard = ({ title, icon, onClick }) => (
+    <button onClick={onClick} className="w-full bg-slate-900 hover:bg-slate-800 active:scale-95 transition-all p-4 rounded-xl border border-slate-800 shadow-md flex items-center gap-4 text-left group">
+        <div className="w-12 h-12 rounded-lg bg-slate-950 border border-amber-500/30 flex items-center justify-center text-2xl group-hover:text-amber-400 transition-colors">
+            {icon}
+        </div>
+        <div className="flex-1">
+            <h3 className="font-bold text-slate-100 text-lg">{title}</h3>
+            <p className="text-xs text-slate-500">Tap to explore equations</p>
+        </div>
+        <div className="text-slate-600">→</div>
+    </button>
+);
+
+const ConceptDetail = ({ concept }) => (
+    <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 mb-4">
+        <div className="flex justify-between items-start mb-2">
+            <h4 className="font-bold text-amber-500">{concept.name}</h4>
+        </div>
+        <div className="bg-black/40 p-3 rounded-lg mb-3 text-center font-mono text-lg text-slate-200 math-eq">
+            {concept.eq.split(/(t)/g).map((part, i) => 
+                part === 't' ? <span key={i} className="var-t">t</span> : part
+            )}
+        </div>
+        <p className="text-sm text-slate-400 mb-3 italic">{concept.desc}</p>
+        <div className="space-y-1">
+            {concept.params.map((p, i) => (
+                <div key={i} className="text-xs flex gap-2">
+                    <span className="font-mono font-bold text-slate-300 w-12 text-right">{p.s}</span>
+                    <span className="text-slate-500">: {p.d}</span>
+                </div>
+            ))}
+        </div>
+    </div>
+);
+
+const App = () => {
+    const [view, setView] = useState('home'); 
+    const [activeSection, setActiveSection] = useState(null); 
+    const [activeData, setActiveData] = useState(null); // Data of the opened section
+    const [menu, setMenu] = useState(false);
+
+    const openSection = (section, data) => {
+        setActiveSection(section);
+        setActiveData(data);
+        setView('detail');
+    };
+
+    return (
+        <div className="flex flex-col h-full bg-slate-950 text-slate-200 font-sans">
+            {/* Header */}
+            <header className="bg-slate-950 border-b border-slate-800 px-4 py-3 flex justify-between items-center shrink-0 sticky top-0 z-20 shadow-md">
+                <div className="flex items-center gap-3" onClick={() => setView('home')}>
+                    {/* User uploaded logo or fallback */}
+                    <img src="KalaSimX.jpg" onError={(e) => e.target.style.display='none'} className="w-10 h-10 rounded-full border-2 border-amber-500 object-cover" />
+                    <div>
+                        <h1 className="font-bold text-xl text-slate-100 tracking-tight">KalaSimX</h1>
+                        <p className="text-[10px] text-amber-500 uppercase tracking-widest">Kalachakra Dynamics</p>
+                    </div>
+                </div>
+                <button onClick={() => setMenu(true)} className="p-2 text-slate-400 hover:text-white"><Icons.Menu /></button>
+            </header>
+
+            {/* Drawer Menu */}
+            <div className={`fixed inset-0 z-50 bg-black/80 backdrop-blur-sm transition-opacity ${menu ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={() => setMenu(false)}>
+                <div className={`absolute right-0 top-0 bottom-0 w-72 bg-slate-900 border-l border-slate-800 p-6 transition-transform duration-300 ${menu ? 'translate-x-0' : 'translate-x-full'}`} onClick={e => e.stopPropagation()}>
+                    <div className="flex justify-between items-center mb-8"><h2 className="font-bold text-xl text-amber-500">Profile</h2><button onClick={() => setMenu(false)} className="text-slate-400"><Icons.Close /></button></div>
+                    <div className="text-center mb-6">
+                        <div className="w-20 h-20 bg-slate-800 border border-amber-500/50 rounded-full mx-auto flex items-center justify-center mb-3 text-amber-500"><Icons.User /></div>
+                        <h3 className="font-bold text-lg text-slate-100">{PROFILE.name}</h3>
+                        <p className="text-sm text-slate-500">{PROFILE.role}</p>
+                    </div>
+                    <div className="space-y-3 text-sm text-slate-400">
+                        {PROFILE.details.map((d, i) => <div key={i} className="pl-3 border-l-2 border-amber-500">{d}</div>)}
+                    </div>
+                    <div className="mt-12 p-4 bg-slate-950 rounded-lg border border-slate-800 text-xs text-center text-slate-600">
+                        Version 2.0 (Kala)<br/>
+                        Updated for JEE Adv.
+                    </div>
+                </div>
+            </div>
+
+            {/* Main Content */}
+            <main className="flex-1 overflow-y-auto no-scrollbar p-4 pb-24">
+                {view === 'home' && (
+                    <div className="space-y-8 animate-in fade-in duration-500">
+                        
+                        {/* Hero Banner */}
+                        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 shadow-2xl">
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/10 rounded-full blur-3xl -translate-y-10 translate-x-10"></div>
+                            <div className="p-6 relative z-10">
+                                <h2 className="text-2xl font-bold text-white mb-1">Time is Motion</h2>
+                                <p className="text-slate-400 text-sm mb-4">Numerical Science Rooted in Ancient Wisdom.</p>
+                                <div className="flex gap-2">
+                                    <span className="text-[10px] bg-amber-500/20 text-amber-400 px-2 py-1 rounded border border-amber-500/20">JEE Advanced</span>
+                                    <span className="text-[10px] bg-blue-500/20 text-blue-400 px-2 py-1 rounded border border-blue-500/20">Indian Math</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Physics Section */}
+                        <div>
+                            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4 ml-1">Physics (Time Variable)</h3>
+                            <div className="grid gap-3">
+                                {PHYSICS_SECTIONS.map(section => (
+                                    <SectionCard key={section.id} title={section.title} icon={section.icon} onClick={() => openSection(section.id, section)} />
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Math Section */}
+                        <div>
+                            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4 ml-1">Mathematics & Kala</h3>
+                            <div className="grid gap-3">
+                                {MATH_SECTIONS.map(section => (
+                                    <SectionCard key={section.id} title={section.title} icon={section.icon} onClick={() => openSection(section.id, section)} />
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {view === 'detail' && activeData && (
+                    <div className="animate-in slide-in-from-bottom duration-300">
+                        <button onClick={() => setView('home')} className="flex items-center gap-2 text-amber-500 mb-6 font-bold text-sm hover:underline">
+                            <Icons.Back /> Back to Dashboard
+                        </button>
+                        
+                        <div className="flex items-center gap-3 mb-6">
+                            <span className="text-3xl">{activeData.icon}</span>
+                            <h2 className="text-2xl font-bold text-white">{activeData.title}</h2>
+                        </div>
+
+                        {/* Simulation Preview (Dynamic based on ID) */}
+                        <div className="mb-6">
+                            <SimCanvas type={activeData.id} />
+                            <p className="text-[10px] text-center text-slate-600 mt-2">Live Visualization of Time Evolution</p>
+                        </div>
+
+                        {/* Concepts List */}
+                        <div className="space-y-4">
+                            {activeData.concepts.map((concept, idx) => (
+                                <ConceptDetail key={idx} concept={concept} />
+                            ))}
+                        </div>
+                    </div>
+                )}
+            </main>
+
+            {/* Bottom Nav */}
+            <nav className="fixed bottom-0 left-0 right-0 bg-slate-950 border-t border-slate-800 h-16 flex justify-around items-center z-30 max-w-md mx-auto backdrop-blur-lg bg-slate-950/90">
+                <button onClick={() => setView('home')} className={`flex flex-col items-center gap-1 p-2 ${view === 'home' ? 'text-amber-500' : 'text-slate-600'}`}>
+                    <Icons.Atom />
+                    <span className="text-[10px] font-bold">Dynamics</span>
+                </button>
+                <button className="flex flex-col items-center gap-1 p-2 text-slate-600 opacity-50 cursor-not-allowed">
+                    <Icons.Time />
+                    <span className="text-[10px] font-bold">Tests</span>
+                </button>
+            </nav>
+        </div>
+    );
+};
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App />);
+</script>
+</body>
+</html>
