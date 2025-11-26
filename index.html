@@ -536,60 +536,305 @@ const WaveSolver = () => {
 };
 
 // --- 5. RELATIVITY SOLVER (NEW: REPLACES OPTICS) ---
+// --- 5. RELATIVITY SOLVER (UPDATED: INFOGRAPHIC MODE) ---
 const RelativitySolver = () => {
-    const [fullScreen, setFullScreen] = useState(false); const [tab, setTab] = useState('story'); 
-    const [speed, setSpeed] = useState(30); // Earth speed simulation
-    
-    // Sim State
+    const [fullScreen, setFullScreen] = useState(false); 
+    const [tab, setTab] = useState('story'); 
+    const [speed, setSpeed] = useState(50); // Default speed
     const timeRef = useRef(0);
+
+    // --- PHYSICS LOOP ---
     useEffect(() => {
         let frame;
-        const loop = () => { timeRef.current += 1; frame = requestAnimationFrame(loop); };
-        loop(); return () => cancelAnimationFrame(frame);
+        const loop = () => { 
+            timeRef.current += 1; 
+            frame = requestAnimationFrame(loop); 
+        };
+        loop(); 
+        return () => cancelAnimationFrame(frame);
     }, []);
 
+    // --- CANVAS DRAWING (The Rain/Umbrella Analogy) ---
     const draw = (ctx, project, w, h) => {
         const t = timeRef.current;
-        const angle = Math.atan(speed / 100); // Exaggerated for visualization
+        // Calculate Angle based on speed (v/c)
+        // We exaggerate the effect for visualization: max speed 100 results in ~45 degrees
+        const angle = Math.atan(speed / 100); 
         
-        // Background Stars
+        // 1. Background (Deep Space)
+        const gradient = ctx.createLinearGradient(0, 0, 0, h);
+        gradient.addColorStop(0, '#0f172a');
+        gradient.addColorStop(1, '#1e293b');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0,0,w,h);
+
+        // 2. Stars (Gamma Draconis context)
         ctx.fillStyle = '#ffffff';
-        for(let i=0; i<20; i++) {
-            const sx = (i*43 + t*0.1) % w;
-            const sy = (i*29) % h;
-            ctx.beginPath(); ctx.arc(sx, sy, 1, 0, 7); ctx.fill();
+        for(let i=0; i<30; i++) {
+            const sx = (i*67) % w;
+            const sy = (i*43) % h;
+            const flicker = Math.sin(t * 0.1 + i) > 0.9 ? 1.5 : 1;
+            ctx.globalAlpha = (Math.sin(t * 0.05 + i) + 1) / 2 * 0.5;
+            ctx.beginPath(); ctx.arc(sx, sy, 1 * flicker, 0, 7); ctx.fill();
+        }
+        ctx.globalAlpha = 1.0;
+
+        // 3. Highlight Gamma Draconis (The Target)
+        const starX = w/2; const starY = 40;
+        ctx.shadowBlur = 15; ctx.shadowColor = '#fbbf24';
+        ctx.fillStyle = '#fbbf24';
+        ctx.beginPath(); ctx.arc(starX, starY, 4, 0, 7); ctx.fill();
+        ctx.shadowBlur = 0;
+
+        // 4. The "Rain" of Light
+        // Light falls straight down relative to space
+        ctx.strokeStyle = '#94a3b8'; 
+        ctx.lineWidth = 1.5;
+        const dropSpeed = 5; 
+        
+        // To simulate the "Runner's perspective" in the frame, 
+        // if the runner moves Right, the rain appears to move Left.
+        // But here we draw the "Absolute Frame" (Rain straight) and the "Telescope" tilted.
+        
+        const cx = w/2; const runnerY = h - 60;
+
+        // Draw Raindrops
+        for(let x = -250; x < 250; x+=25) {
+            const dropOffset = (t * dropSpeed + x * 33) % h; // looping Y
+            const rx = cx + x; 
+            
+            // Draw straight rain (Absolute Reality)
+            ctx.beginPath(); 
+            ctx.strokeStyle = 'rgba(148, 163, 184, 0.3)'; // Faint straight lines
+            ctx.moveTo(rx, dropOffset); 
+            ctx.lineTo(rx, dropOffset + 25); 
+            ctx.stroke();
+
+            // Draw "Apparent" rain (Relative to Runner) if speed > 0
+            // This visualizes what the runner "sees" (slanted rain)
+            if(speed > 5) {
+                const slantX = Math.tan(angle) * 25;
+                ctx.beginPath();
+                ctx.strokeStyle = 'rgba(250, 204, 21, 0.6)'; // Yellowish slanted light
+                ctx.moveTo(rx, dropOffset);
+                ctx.lineTo(rx - slantX, dropOffset + 25);
+                ctx.stroke();
+            }
         }
 
-        // Mode: Rain/Umbrella Analogy
-        const cx = w/2; const cy = h/2;
+        // 5. The Runner (Earth)
+        // We keep Earth centered, but the "Universe" moves past it conceptually, 
+        // or we just show the tilt.
         
-        // Rain (Vertical Light)
-        ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 1;
-        for(let x = -200; x < 200; x+=20) {
-            const rx = cx + x - (t*speed*0.05)%20; 
-            const dropY = (t*5 + x)%h;
-            // Draw rain relative to moving frame
-            ctx.beginPath(); ctx.moveTo(rx, dropY); ctx.lineTo(rx - Math.tan(angle)*20, dropY+20); ctx.stroke();
-        }
+        // Draw The Telescope (Umbrella)
+        const len = 50;
+        const ex = cx + Math.sin(angle) * len; // Tilted tip
+        const ey = runnerY - Math.cos(angle) * len;
 
-        // Runner/Earth
-        const runnerX = cx; const runnerY = h - 60;
-        ctx.fillStyle = '#22d3ee';
-        ctx.beginPath(); ctx.arc(runnerX, runnerY, 10, 0, 7); ctx.fill();
-        
-        // Telescope/Umbrella
-        const len = 40;
-        const ex = runnerX + Math.sin(angle)*len;
-        const ey = runnerY - Math.cos(angle)*len;
-        ctx.strokeStyle = '#facc15'; ctx.lineWidth = 3;
-        ctx.beginPath(); ctx.moveTo(runnerX, runnerY); ctx.lineTo(ex, ey); ctx.stroke();
-        
-        // Label
-        ctx.fillStyle = '#fff'; ctx.font = '10px monospace';
-        ctx.fillText(`Angle: ${(angle * 180/Math.PI).toFixed(1)}°`, runnerX + 20, runnerY - 20);
+        // Scope Body
+        ctx.strokeStyle = '#38bdf8'; // Cyan telescope
+        ctx.lineWidth = 4;
+        ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(cx, runnerY); ctx.lineTo(ex, ey); ctx.stroke();
+
+        // Eye Piece
+        ctx.fillStyle = '#38bdf8';
+        ctx.beginPath(); ctx.arc(cx, runnerY, 6, 0, 7); ctx.fill();
+
+        // 6. Data Overlay on Canvas
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 12px monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText(`v (Speed): ${speed} km/s`, 20, h-30);
+        ctx.fillText(`θ (Tilt): ${(angle * 180/Math.PI).toFixed(1)}°`, 20, h-15);
     };
 
-    return ( <div className={`flex flex-col h-[calc(100dvh-60px)] -m-4 relative ${fullScreen ? 'fixed inset-0 z-50 m-0 bg-slate-950' : ''}`}> <div className={`relative transition-all duration-500 bg-slate-900 overflow-hidden shadow-xl z-20 ${fullScreen ? 'absolute inset-0 h-full' : 'h-[35%] shrink-0'}`}> <SimCanvas draw={draw} initZoom={25} /> <div className="absolute top-4 right-4 flex items-center gap-3"> <button onClick={() => setFullScreen(!fullScreen)} className="p-2 rounded-full bg-slate-800/80 text-slate-400 hover:text-white backdrop-blur">⛶</button> </div> </div> {!fullScreen && ( <div className="flex-1 flex flex-col bg-slate-950 overflow-hidden"> <div className="flex border-b border-slate-800 shrink-0"> {['story', 'sim'].map(id => (<button key={id} onClick={() => setTab(id)} className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-widest transition ${tab === id ? 'text-blue-400 bg-slate-900 border-b-2 border-blue-500' : 'text-slate-600 hover:text-slate-400'}`}>{id}</button>))} </div> <div className="flex-1 overflow-hidden relative"> {tab === 'story' && ( <div className="h-full overflow-y-auto p-4 space-y-6 no-scrollbar text-slate-300 text-sm leading-relaxed"> <div className="space-y-4"> <h3 className="text-lg font-bold text-white">The Tale of Light's Secret</h3> <p>My dear friends,</p> <p>As always, the story begins with the sky... that infinite mystery. It starts with a star, Gamma Draconis. In 1669, <strong>Robert Hooke</strong> looked at it, hoping to prove the Earth moves by finding <em>Parallax</em> (the shift in position due to distance). He thought he found it!</p>  <p>But truth is not so easily caught. In 1725, <strong>James Bradley</strong> looked deeper. He saw a shift, but in the wrong direction! It wasn't Parallax. It was something new.</p> <h4 className="text-white font-bold mt-4">The Rain & The Runner</h4> <p>Bradley realized: If you stand in rain, you hold your umbrella straight. But if you run? You must tilt it forward!  The rain hasn't changed angle, but your speed creates an <em>Aberration</em>.</p> <p>Earth is running through the "rain" of starlight. We tilt our telescopes not because the star moved, but because <em>we</em> are moving.</p> <h4 className="text-white font-bold mt-4">The Ether Paradox</h4> <p>Scientists like Young thought space was filled with "Ether", like wind blowing through trees.  They tried to measure this wind (Arago, Michelson). But they found... nothing. Zero. The universe laughed at their theories. This silence led to Einstein and Relativity.</p> </div> </div> )} {tab === 'sim' && ( <div className="h-full overflow-y-auto p-4 space-y-4 no-scrollbar"> <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800 mb-4"> <div className="text-[10px] font-bold text-slate-500 uppercase mb-2">ABERRATION FORMULA</div> <div className="font-mono text-white text-sm">tan(θ) = v / c</div> <div className="text-xs text-slate-400 mt-1">v = Earth Speed, c = Speed of Light</div> </div> <div className="space-y-2"> <div className="flex justify-between text-xs text-slate-400"><span>Observer Speed (v)</span><span>{speed} km/s</span></div> <input type="range" min="0" max="100" value={speed} onChange={e=>setSpeed(parseFloat(e.target.value))} className="w-full h-1 bg-cyan-900 rounded appearance-none accent-cyan-500" /> </div> <div className="grid grid-cols-2 gap-3 mt-4"> <div className="bg-slate-900 p-3 rounded border border-slate-800"> <div className="text-[10px] text-slate-500">Tilt Angle (θ)</div> <div className="text-xl text-yellow-400 font-mono">{(Math.atan(speed/100)*180/Math.PI).toFixed(2)}°</div> </div> <div className="bg-slate-900 p-3 rounded border border-slate-800"> <div className="text-[10px] text-slate-500">Sun Light Delay</div> <div className="text-xl text-cyan-400 font-mono">8m 12s</div> </div> </div> </div> )} </div> </div> )} </div> );
+    return ( 
+        <div className={`flex flex-col h-[calc(100dvh-60px)] -m-4 relative ${fullScreen ? 'fixed inset-0 z-50 m-0 bg-slate-950' : ''}`}> 
+            
+            {/* TOP PANEL: SIMULATION CANVAS */}
+            <div className={`relative transition-all duration-500 bg-slate-900 overflow-hidden shadow-xl z-20 ${fullScreen ? 'absolute inset-0 h-full' : 'h-[40%] shrink-0'}`}> 
+                <SimCanvas draw={draw} initZoom={25} /> 
+                
+                {/* Overlay Controls */}
+                <div className="absolute top-4 right-4 flex items-center gap-3"> 
+                    <button onClick={() => setFullScreen(!fullScreen)} className="p-2 rounded-full bg-slate-800/80 text-slate-400 hover:text-white backdrop-blur">⛶</button> 
+                </div> 
+                
+                <div className="absolute bottom-4 right-4 text-[10px] font-mono text-slate-400 text-right"> 
+                    <div className="flex items-center gap-2 justify-end">
+                        <span className="w-2 h-2 rounded-full bg-slate-500"></span> सत्य (Straight Rain)
+                    </div>
+                    <div className="flex items-center gap-2 justify-end">
+                        <span className="w-2 h-2 rounded-full bg-yellow-400"></span> आभास (Apparent Path)
+                    </div>
+                </div> 
+            </div> 
+
+            {/* BOTTOM PANEL: STORY & CONTROLS */}
+            {!fullScreen && ( 
+                <div className="flex-1 flex flex-col bg-slate-950 overflow-hidden border-t border-slate-800"> 
+                    
+                    {/* TABS */}
+                    <div className="flex border-b border-slate-800 shrink-0 bg-slate-900"> 
+                        <button onClick={() => setTab('story')} className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-widest transition ${tab === 'story' ? 'text-yellow-400 border-b-2 border-yellow-500 bg-slate-800' : 'text-slate-500'}`}>The Story</button>
+                        <button onClick={() => setTab('data')} className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-widest transition ${tab === 'data' ? 'text-cyan-400 border-b-2 border-cyan-500 bg-slate-800' : 'text-slate-500'}`}>Data & Facts</button>
+                    </div> 
+
+                    {/* SCROLLABLE CONTENT */}
+                    <div className="flex-1 overflow-y-auto scroller relative"> 
+                        
+                        {tab === 'story' && ( 
+                            <div className="p-6 space-y-8 pb-20">
+                                
+                                {/* CHAPTER 1 */}
+                                <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
+                                    <h3 className="text-yellow-500 font-bold text-xs uppercase tracking-widest mb-2">1669: द बिगिनिंग</h3>
+                                    <h1 className="text-2xl font-bold text-white mb-4">गामा ड्रैकोनिस: एक खोज</h1>
+                                    <p className="text-slate-300 text-sm leading-7">
+                                        यह कथा ड्रैगन के सिर पर स्थित एक तारे, <strong>'गामा ड्रैकोनिस'</strong> की है, और उससे भी अधिक यह कथा मनुष्य की उस दृष्टि की है जो सत्य को खोजना चाहती है।
+                                    </p>
+                                    <p className="text-slate-300 text-sm leading-7 mt-4">
+                                        वर्ष 1669 में <strong>रॉबर्ट हुक</strong> ने अपनी दूरबीन इस तारे पर साधी। वह कोपरनिकस के सिद्धांत—कि पृथ्वी सूर्य का चक्कर लगाती है—का प्रमाण खोज रहा था। उसे तारे की स्थिति में एक बड़ा बदलाव दिखा। हुक ने उसे <span className="text-cyan-400 font-bold">'पॅरलॅक्स' (Parallax/दृष्टि-भेद)</span> मान लिया।
+                                    </p>
+                                </div>
+
+                                {/* CHAPTER 2 */}
+                                <div className="border-l-2 border-slate-700 pl-4 py-2 my-6">
+                                    <h4 className="text-white font-bold text-lg mb-2">पॅरलॅक्स: दूरी का भ्रम</h4>
+                                    <p className="text-slate-400 text-xs italic mb-3">
+                                        "पॅरलॅक्स दूरी का खेल है।"
+                                    </p>
+                                    <p className="text-slate-300 text-sm leading-6">
+                                        जैसे ट्रेन में चलते हुए पास के पेड़ तेज़ी से पीछे भागते दिखते हैं, लेकिन दूर का पहाड़ स्थिर या बहुत धीमा लगता है। वैसे ही पृथ्वी के घूमने पर पास के तारे की जगह बदलनी चाहिए।
+                                    </p>
+                                    <div className="mt-4 bg-slate-900 p-3 rounded text-xs text-slate-400">
+                                        <strong>अंतर्दृष्टि:</strong> हम सब अपने-अपने 'पॅरलॅक्स' से दुनिया को देख रहे हैं और सोच रहे हैं कि हम सत्य देख रहे हैं। हम सत्य नहीं, केवल एक सापेक्ष कोण देख रहे हैं।
+                                    </div>
+                                </div>
+
+                                {/* CHAPTER 3 */}
+                                <div>
+                                    <h3 className="text-cyan-500 font-bold text-xs uppercase tracking-widest mb-2">1725: द टर्निंग पॉइंट</h3>
+                                    <h1 className="text-xl font-bold text-white mb-3">ब्रैडली और "पथ-भ्रम"</h1>
+                                    <p className="text-slate-300 text-sm leading-7">
+                                        करीब साठ साल बाद, 1725 में, <strong>ब्रैडली</strong> आया। उसने भी तारे की स्थिति में बदलाव देखा।
+                                    </p>
+                                    <p className="text-slate-300 text-sm leading-7 mt-3">
+                                        पर उसने पाया कि तारे का यह झुकाव तब सबसे ज्यादा नहीं था जब पृथ्वी तारे के 'बगल' से गुज़र रही थी। नहीं! यह झुकाव तो तब सबसे ज्यादा था जब पृथ्वी सीधा तारे की 'ओर' जा रही थी या उससे 'दूर' जा रही थी!
+                                    </p>
+                                    <p className="text-yellow-400 text-sm font-bold mt-2">
+                                        यह पॅरलॅक्स (दूरी का प्रभाव) नहीं हो सकता था।
+                                    </p>
+                                </div>
+
+                                {/* INTERACTIVE SIMULATION CHAPTER */}
+                                <div className="bg-slate-900 border border-slate-700 rounded-xl p-4 shadow-lg my-6">
+                                    <div className="flex items-center gap-2 mb-3">
+                                        <span className="bg-yellow-500 text-black text-[10px] font-bold px-2 py-0.5 rounded">प्रयोग (Simulation)</span>
+                                        <h4 className="text-white font-bold text-sm">वर्षा और गति</h4>
+                                    </div>
+                                    <p className="text-slate-300 text-xs leading-5 mb-4">
+                                        मान लीजिए बारिश सीधी नीचे गिर रही है। यदि आप खड़े हैं, तो छाता सीधा रखेंगे। <strong>लेकिन यदि आप दौड़ने लगें?</strong>
+                                    </p>
+                                    
+                                    {/* SLIDER CONTROL */}
+                                    <div className="space-y-2 mb-4">
+                                        <div className="flex justify-between text-xs text-cyan-400 font-bold">
+                                            <span>खड़े हैं (v=0)</span>
+                                            <span>दौड़ रहे हैं (v=100)</span>
+                                        </div>
+                                        <input 
+                                            type="range" 
+                                            min="0" max="100" 
+                                            value={speed} 
+                                            onChange={(e) => setSpeed(parseFloat(e.target.value))}
+                                            className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-cyan-500"
+                                        />
+                                        <div className="text-center text-xs text-slate-500 mt-1">
+                                            पृथ्वी की गति: <span className="text-white font-mono">{speed} km/s</span>
+                                        </div>
+                                    </div>
+
+                                    <p className="text-slate-300 text-xs leading-5">
+                                        ऊपर कैनवास में देखें। बारिश (प्रकाश) की दिशा नहीं बदली, तुम्हारी गति के कारण तुम्हें उसका पथ बदला हुआ दिख रहा है। 
+                                        <br/><br/>
+                                        <span className="text-white">यही है एबरेशन (Aberration)।</span>
+                                    </p>
+                                </div>
+
+                                {/* CONCLUSION */}
+                                <div>
+                                    <h1 className="text-xl font-bold text-white mb-3">8 मिनट और 12 सेकंड</h1>
+                                    <p className="text-slate-300 text-sm leading-7">
+                                        ब्रैडली ने पृथ्वी की गति (v) और प्रकाश के इस झुकाव (c) के कोण को मापा और एक क्रांतिकारी गणना की। उसने दुनिया को बताया कि सूर्य की किरण को हम तक पहुँचने में 8 मिनट और 12 सेकंड लगते हैं।
+                                    </p>
+                                    <div className="mt-4 border-l-4 border-cyan-500 pl-4 py-1">
+                                        <p className="text-slate-200 text-sm italic font-serif">
+                                            "विकृति तारे में नहीं है, विकृति देखने वाले की अपनी गति में है।"
+                                        </p>
+                                    </div>
+                                    <p className="text-slate-400 text-xs mt-4">
+                                        The distortion is in the observer.
+                                    </p>
+                                </div>
+
+                            </div> 
+                        )} 
+
+                        {tab === 'data' && ( 
+                            <div className="p-4 space-y-4">
+                                <div className="bg-slate-900 p-4 rounded-xl border border-slate-800">
+                                    <h3 className="text-xs font-bold text-slate-500 uppercase mb-3">तुलना (Comparison)</h3>
+                                    <table className="w-full text-left border-collapse">
+                                        <thead>
+                                            <tr className="text-[10px] text-slate-400 border-b border-slate-700">
+                                                <th className="py-2">विशेषता</th>
+                                                <th className="py-2 text-cyan-400">पॅरलॅक्स</th>
+                                                <th className="py-2 text-yellow-400">एबरेशन</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="text-xs text-slate-300">
+                                            <tr className="border-b border-slate-800">
+                                                <td className="py-3 font-bold text-slate-500">कारण</td>
+                                                <td className="py-3">पृथ्वी की स्थिति</td>
+                                                <td className="py-3">पृथ्वी की गति</td>
+                                            </tr>
+                                            <tr className="border-b border-slate-800">
+                                                <td className="py-3 font-bold text-slate-500">निर्भरता</td>
+                                                <td className="py-3">दूरी पर निर्भर</td>
+                                                <td className="py-3">प्रकाश की गति (c)</td>
+                                            </tr>
+                                            <tr>
+                                                <td className="py-3 font-bold text-slate-500">खोज</td>
+                                                <td className="py-3">हुक का भ्रम</td>
+                                                <td className="py-3">ब्रैडली का सत्य</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <div className="bg-slate-900 p-4 rounded-xl border border-slate-800">
+                                    <h3 className="text-xs font-bold text-slate-500 uppercase mb-3">Live Data</h3>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <div className="text-[10px] text-slate-500">Current Velocity</div>
+                                            <div className="text-lg font-mono text-cyan-400">{speed} <span className="text-xs">unit</span></div>
+                                        </div>
+                                        <div>
+                                            <div className="text-[10px] text-slate-500">Tilt Angle (θ)</div>
+                                            <div className="text-lg font-mono text-yellow-400">{(Math.atan(speed/100)*180/Math.PI).toFixed(2)}°</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div> 
+                        )}
+
+                    </div> 
+                </div> 
+            )} 
+        </div> 
+    );
 };
 
 // --- SIM CANVAS (FALLBACK) ---
