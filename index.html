@@ -76,7 +76,8 @@ const Icons = {
     Play: () => <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>,
     Pause: () => <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>,
     Reset: () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>,
-    Full: () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+    Full: () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>,
+    YouTube: () => <svg width="24" height="24" fill="#ef4444" viewBox="0 0 24 24"><path d="M19.615 3.184c-3.604-.246-11.631-.245-15.23 0-3.897.266-4.356 2.62-4.385 8.816.029 6.185.484 8.549 4.385 8.816 3.6.245 11.626.246 15.23 0 3.897-.266 4.356-2.62 4.385-8.816-.029-6.185-.484-8.549-4.385-8.816zm-10.615 12.816v-8l8 3.993-8 4.007z"/></svg>
 };
 
 // --- 3D CAMERA ---
@@ -166,9 +167,59 @@ const SimCanvas = ({ draw, initZoom=30 }) => {
 
 // --- DATA ---
 const BOOKS = [
-    { id: 1, title: "Physics Concept Builder Vol 1", price: "₹450", link: "https://amzn.in/d/hCAUILC", desc: "For JEE Main & Advanced", color: "bg-orange-100 text-orange-800" },
-    { id: 2, title: "Advanced Problems in Physics", price: "₹650", link: "https://amzn.in/d/gSdEWNs", desc: "Problem Collection", color: "bg-blue-100 text-blue-800" },
-    { id: 3, title: "Digital Physics Interactive", price: "₹200", link: "https://play.google.com/store/books/details?id=dINYEQAAQBAJ", desc: "e-Book Edition", color: "bg-green-100 text-green-800" }
+    { 
+        id: 1, 
+        title: "Electronics and Circuits", 
+        desc: "Analog & Digital Systems", 
+        color: "bg-purple-100 text-purple-800",
+        links: [
+            { label: "Google Play", url: "https://play.google.com/store/books/details?id=retaEQAAQBAJ" },
+            { label: "Audiobook", url: "https://play.google.com/store/audiobooks/details?id=AQAAAEBKaVwpBM" }
+        ]
+    },
+    { 
+        id: 2, 
+        title: "Quantum Field Theory", 
+        desc: "Advanced Physics", 
+        color: "bg-slate-100 text-slate-800",
+        links: [
+            { label: "Amazon", url: "https://a.co/d/gR8mRuz" },
+            { label: "Pothi", url: "https://store.pothi.com/book/abhishek-kumar-quantum-field-theory-3/" }
+        ]
+    },
+    { 
+        id: 3, 
+        title: "Planetary Motion", 
+        desc: "Gravity Dynamics", 
+        color: "bg-blue-100 text-blue-800",
+        links: [
+            { label: "Amazon", url: "https://amzn.in/d/9HdcrQx" },
+            { label: "Flipkart", url: "https://www.flipkart.com/gravity-planetary-motion/p/itm84b6b08e673e0" }
+        ]
+    },
+    { 
+        id: 4, 
+        title: "Relativity: Speed of Light", 
+        desc: "Special Relativity", 
+        color: "bg-orange-100 text-orange-800",
+        links: [
+            { label: "Amazon", url: "https://amzn.in/d/36O230l" },
+            { label: "Flipkart", url: "https://dl.flipkart.com/s/pO6BTiuuuN" }
+        ]
+    }
+];
+
+const YOUTUBE_VIDEOS = [
+    {
+        id: "OSpU_nuSSQQ",
+        title: "Concept of Angle: Introduction",
+        url: "https://youtu.be/OSpU_nuSSQQ?si=HsnScqm9XnpgNmPx"
+    },
+    {
+        id: "FzBTUK1d3qk",
+        title: "Degree and Radian: Nakshatra Prediction",
+        url: "https://youtu.be/FzBTUK1d3qk?si=mBxve68JnzsmZYji"
+    }
 ];
 
 const SIMS = [
@@ -896,7 +947,57 @@ const App = () => {
                         {sim !== 'orbit' && sim !== 'em' && sim !== 'thermo' && sim !== 'wave' && sim !== 'relativity' && <div className="mt-4 p-4 bg-blue-50 border border-blue-100 rounded-xl text-sm text-blue-900"><strong>Note:</strong> Visualize the change. This simulation runs in real-time.</div>}
                     </div>
                 )}
-                {view === 'books' && (<div className="space-y-4"><h2 className="font-bold text-xl text-slate-800">Study Material</h2>{BOOKS.map(b => (<div key={b.id} className="bg-white rounded-xl p-4 shadow-sm border border-slate-100 flex gap-4"><div className={`w-20 h-24 shrink-0 rounded flex items-center justify-center ${b.color}`}><Icons.Book /></div><div className="flex-1 flex flex-col"><h3 className="font-bold text-slate-900 leading-tight">{b.title}</h3><p className="text-xs text-slate-500 mt-1 mb-2">{b.desc}</p><div className="mt-auto flex justify-between items-center"><span className="text-xs font-bold bg-green-100 text-green-700 px-2 py-1 rounded">{b.price}</span><a href={b.link} target="_blank" className="text-xs font-bold bg-slate-900 text-white px-3 py-2 rounded">Buy Now</a></div></div></div>))}</div>)}
+                {view === 'books' && (
+                    <div className="space-y-6">
+                        {/* BOOKS SECTION */}
+                        <div className="space-y-4">
+                            <h2 className="font-bold text-xl text-slate-800">Study Material</h2>
+                            {BOOKS.map(b => (
+                                <div key={b.id} className="bg-white rounded-xl p-4 shadow-sm border border-slate-100 flex gap-4">
+                                    <div className={`w-20 h-24 shrink-0 rounded flex items-center justify-center ${b.color}`}>
+                                        <Icons.Book />
+                                    </div>
+                                    <div className="flex-1 flex flex-col">
+                                        <h3 className="font-bold text-slate-900 leading-tight">{b.title}</h3>
+                                        <p className="text-xs text-slate-500 mt-1 mb-2">{b.desc}</p>
+                                        <div className="mt-auto flex gap-2">
+                                            {b.links.map((link, i) => (
+                                                <a key={i} href={link.url} target="_blank" className="flex-1 bg-slate-900 text-white text-[10px] font-bold py-2 px-1 rounded text-center truncate hover:bg-slate-700 transition">
+                                                    {link.label}
+                                                </a>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* YOUTUBE SECTION */}
+                        <div className="space-y-4">
+                            <h2 className="font-bold text-xl text-slate-800 flex items-center gap-2">
+                                <span className="text-red-500"><Icons.YouTube /></span> Lectures
+                            </h2>
+                            {YOUTUBE_VIDEOS.map(v => (
+                                <a key={v.id} href={v.url} target="_blank" className="block bg-white rounded-xl overflow-hidden shadow-sm border border-slate-100 hover:shadow-md transition group">
+                                    <div className="relative aspect-video bg-slate-200">
+                                        <img src={`https://img.youtube.com/vi/${v.id}/mqdefault.jpg`} alt={v.title} className="w-full h-full object-cover" />
+                                        <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/10 transition">
+                                            <div className="w-10 h-10 bg-red-600 rounded-full flex items-center justify-center text-white shadow-lg">
+                                                <Icons.Play />
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="p-3">
+                                        <h3 className="font-bold text-slate-900 text-sm leading-tight line-clamp-2">{v.title}</h3>
+                                        <div className="mt-2 flex items-center gap-1 text-[10px] text-slate-500 font-bold uppercase tracking-wide">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span> Watch on YouTube
+                                        </div>
+                                    </div>
+                                </a>
+                            ))}
+                        </div>
+                    </div>
+                )}
             </main>
             <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 h-16 flex justify-around items-center z-30 max-w-md mx-auto"><button onClick={() => setView('home')} className={`flex flex-col items-center gap-1 p-2 ${view!=='books'?'text-blue-600':'text-slate-400'}`}><Icons.Lab /><span className="text-[10px] font-bold">Labs</span></button><button onClick={() => setView('books')} className={`flex flex-col items-center gap-1 p-2 ${view==='books'?'text-blue-600':'text-slate-400'}`}><Icons.Book /><span className="text-[10px] font-bold">Books</span></button></nav>
         </div>
