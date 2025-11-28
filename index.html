@@ -3,71 +3,156 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="theme-color" content="#ffffff">
+    <meta name="theme-color" content="#020617">
     <meta name="mobile-web-app-capable" content="yes">
     
-    <link rel="manifest" href="manifest.json">
+    <!-- FONTS -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;500;700&display=swap" rel="stylesheet">
     
     <title>Kala-SimuX Physics</title>
     
+    <!-- LIBRARIES -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
 
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Rajdhani', 'sans-serif'],
+                        display: ['Orbitron', 'sans-serif'],
+                    },
+                    colors: {
+                        cosmic: { 900: '#020617', 800: '#0f172a' }
+                    },
+                    animation: {
+                        'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                    }
+                }
+            }
+        }
+    </script>
+
     <style>
-        /* CORE LAYOUT */
         body { 
             -webkit-tap-highlight-color: transparent; 
             user-select: none; 
-            font-family: sans-serif; 
-            background-color: #f8fafc; 
-            overscroll-behavior-y: none; 
+            background-color: #020617; 
+            color: #e2e8f0;
+            overflow: hidden; 
+            margin: 0;
         }
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        
-        /* 3D CANVAS STYLES */
-        canvas { cursor: grab; touch-action: none; }
-        canvas:active { cursor: grabbing; }
 
-        /* UI STYLES */
-        .scroller::-webkit-scrollbar { width: 4px; height: 4px; }
+        .scroller { overflow-y: auto; overflow-x: hidden; }
+        .scroller::-webkit-scrollbar { width: 4px; }
         .scroller::-webkit-scrollbar-track { background: #0f172a; }
-        .scroller::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
-        .glass-panel { background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(8px); border-bottom: 1px solid rgba(51, 65, 85, 0.5); }
-        .input-field { background: rgba(30, 41, 59, 0.5); border: 1px solid rgba(71, 85, 105, 0.5); color: #fff; font-family: monospace; }
-        .input-field:focus { border-color: #3b82f6; outline: none; background: rgba(30, 41, 59, 0.8); }
-        .data-table { width: 100%; font-size: 10px; font-family: monospace; border-collapse: collapse; }
-        .data-table th { background: #1e293b; position: sticky; top: 0; z-index: 10; text-align: left; padding: 8px; color: #94a3b8; }
-        .data-table td { border-bottom: 1px solid #1e293b; padding: 4px 8px; color: #cbd5e1; }
-        .data-table tr:nth-child(even) { background: rgba(255,255,255,0.02); }
+        .scroller::-webkit-scrollbar-thumb { background: #0ea5e9; border-radius: 2px; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+
+        .glass-panel { 
+            background: rgba(15, 23, 42, 0.85); 
+            backdrop-filter: blur(16px); 
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .glass-card {
+            background: linear-gradient(145deg, rgba(30, 41, 59, 0.4) 0%, rgba(15, 23, 42, 0.6) 100%);
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(148, 163, 184, 0.1);
+            transition: border-color 0.3s ease;
+        }
+        .glass-card:hover {
+            border-color: rgba(56, 189, 248, 0.3);
+        }
+
+        .star-bg {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle at 50% 120%, #1e1b4b 0%, #020617 60%, #000000 100%);
+            z-index: -1;
+        }
+        .grid-overlay {
+            position: absolute; inset: 0;
+            background-image: linear-gradient(rgba(56, 189, 248, 0.05) 1px, transparent 1px),
+                            linear-gradient(90deg, rgba(56, 189, 248, 0.05) 1px, transparent 1px);
+            background-size: 40px 40px;
+            mask-image: linear-gradient(to bottom, black 40%, transparent 100%);
+        }
+        
+        .data-table { width: 100%; font-size: 11px; font-family: 'Rajdhani', monospace; border-collapse: collapse; }
+        .data-table th { background: rgba(15, 23, 42, 0.9); position: sticky; top: 0; padding: 8px; color: #94a3b8; text-transform: uppercase; text-align: left;}
+        .data-table td { border-bottom: 1px solid rgba(51, 65, 85, 0.3); padding: 6px 8px; color: #e2e8f0; }
+        
+        #loader { position: fixed; inset: 0; background: #020617; display: flex; justify-content: center; align-items: center; z-index: 50; transition: opacity 0.5s; flex-direction: column; gap: 20px;}
+        
+        #error-display {
+            display: none; position: fixed; inset: 0; z-index: 100;
+            background: rgba(0,0,0,0.95); color: #ef4444; padding: 20px;
+            font-family: monospace; overflow: auto;
+        }
     </style>
 </head>
 <body>
 
-<div id="root" class="w-full h-[100dvh] flex flex-col max-w-md mx-auto bg-white shadow-2xl relative overflow-hidden"></div>
+<div id="loader">
+    <div class="w-12 h-12 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin"></div>
+    <div class="text-cyan-500 font-mono text-sm animate-pulse tracking-widest">SYSTEM INITIALIZING...</div>
+    <div class="text-slate-500 text-xs font-mono" id="loader-status">Loading Modules...</div>
+</div>
 
+<div id="error-display"></div>
+
+<div class="star-bg"><div class="grid-overlay"></div></div>
+<div id="root" class="w-full h-[100dvh] flex flex-col max-w-md mx-auto relative overflow-hidden shadow-2xl border-x border-white/5"></div>
+
+<!-- CACHE KILLER & ERROR TRAP -->
 <script>
+    document.getElementById('loader-status').innerText = "Cleaning Cache...";
     if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-            navigator.serviceWorker.register('sw.js').then(
-                registration => console.log('SW Registered!', registration.scope),
-                err => console.log('SW Failed:', err)
-            );
+        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+            for(let registration of registrations) {
+                registration.unregister();
+            }
         });
+        if ('caches' in window) {
+            caches.keys().then((names) => {
+                names.forEach((name) => {
+                    caches.delete(name);
+                });
+            });
+        }
     }
+    
+    window.onerror = function(msg, url, line, col, error) {
+        const el = document.getElementById('error-display');
+        const loader = document.getElementById('loader');
+        if(loader) loader.style.display = 'none';
+        el.style.display = 'block';
+        el.innerHTML = `<h2 style="color:red;font-size:20px;margin-bottom:10px;">SYSTEM CRITICAL ERROR</h2>
+                        <div style="background:#111;padding:15px;border:1px solid #333;border-radius:5px;">
+                            <p style="color:#fff;font-weight:bold;">${msg}</p>
+                            <p style="color:#aaa;">Line: ${line} : ${col}</p>
+                        </div>
+                        <button onclick="window.location.reload(true)" style="margin-top:20px;padding:10px 20px;background:#ef4444;color:white;border:none;border-radius:5px;">FORCE RELOAD</button>`;
+        return false;
+    };
 </script>
 
 <script type="text/babel">
-const { useState, useEffect, useRef } = React;
+document.getElementById('loader-status').innerText = "Mounting React...";
+
+const { useState, useEffect, useRef, useCallback } = React;
 
 // --- ICONS ---
 const Icons = {
-    Menu: () => <svg width="24" height="24" fill="none" stroke="#1e293b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>,
-    Back: () => <svg width="24" height="24" fill="none" stroke="#1e293b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>,
+    Menu: () => <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>,
+    Back: () => <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>,
     Atom: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1"/><path d="M20.2 20.2c2.04-2.03.02-7.36-4.5-11.9-4.54-4.52-9.87-6.54-11.9-4.5-2.04 2.03-.02 7.36 4.5 11.9 4.54 4.52 9.87 6.54 11.9 4.5Z"/><path d="M15.7 15.7c4.52-4.54 6.54-9.87 4.5-11.9-2.03-2.04-7.36-.02-11.9 4.5-4.52 4.54-6.54 9.87-4.5 11.9 2.03 2.04 7.36.02 11.9-4.5Z"/></svg>,
     Book: () => <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>,
     Lab: () => <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M2 12h20"/><path d="M2 12l5-5"/><path d="M22 12l-5 5"/></svg>,
@@ -76,42 +161,56 @@ const Icons = {
     Play: () => <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>,
     Pause: () => <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>,
     Reset: () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>,
-    Full: () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>,
-    YouTube: () => <svg width="24" height="24" fill="#ef4444" viewBox="0 0 24 24"><path d="M19.615 3.184c-3.604-.246-11.631-.245-15.23 0-3.897.266-4.356 2.62-4.385 8.816.029 6.185.484 8.549 4.385 8.816 3.6.245 11.626.246 15.23 0 3.897-.266 4.356-2.62 4.385-8.816-.029-6.185-.484-8.549-4.385-8.816zm-10.615 12.816v-8l8 3.993-8 4.007z"/></svg>
+    Full: () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
 };
 
-// --- 3D CAMERA ---
+// --- DATA ---
+const SIMS = [ 
+    { id: 'orbit', title: 'N-Body ODE Solver', desc: 'Coupled Differential Equations', color: 'text-indigo-400', iconBg: 'bg-indigo-500/20' }, 
+    { id: 'em', title: 'Electromagnetism', desc: 'Maxwell & Lorentz Dynamics', color: 'text-violet-400', iconBg: 'bg-violet-500/20' }, 
+    { id: 'thermo', title: 'Thermodynamics', desc: 'Stat Mech & 3 Laws', color: 'text-amber-400', iconBg: 'bg-amber-500/20' }, 
+    { id: 'wave', title: 'Wave Motion', desc: 'String, Sound & Light', color: 'text-pink-400', iconBg: 'bg-pink-500/20' }, 
+    { id: 'relativity', title: 'Relativity & Aberration', desc: 'The Speed of Light Paradox', color: 'text-cyan-400', iconBg: 'bg-cyan-500/20' } 
+];
+
+const BOOKS = [ 
+    { id: 1, title: "Electronics and Circuits", desc: "Analog & Digital Systems", color: "text-purple-400 border-purple-500/30", links: [ { label: "Google Play", url: "https://play.google.com/store/books/details?id=retaEQAAQBAJ" }, { label: "Audiobook", url: "https://play.google.com/store/audiobooks/details?id=AQAAAEBKaVwpBM" } ] }, 
+    { id: 2, title: "Quantum Field Theory", desc: "Advanced Physics", color: "text-cyan-400 border-cyan-500/30", links: [ { label: "Amazon", url: "https://a.co/d/gR8mRuz" }, { label: "Pothi", url: "https://store.pothi.com/book/abhishek-kumar-quantum-field-theory-3/" } ] }, 
+    { id: 3, title: "Planetary Motion", desc: "Gravity Dynamics", color: "text-blue-400 border-blue-500/30", links: [ { label: "Amazon", url: "https://amzn.in/d/9HdcrQx" }, { label: "Flipkart", url: "https://www.flipkart.com/gravity-planetary-motion/p/itm84b6b08e673e0" } ] }, 
+    { id: 4, title: "Relativity: Speed of Light", desc: "Special Relativity", color: "text-amber-400 border-amber-500/30", links: [ { label: "Amazon", url: "https://amzn.in/d/36O230l" }, { label: "Flipkart", url: "https://dl.flipkart.com/s/pO6BTiuuuN" } ] } 
+];
+
+const YOUTUBE_VIDEOS = [ 
+    { id: "OSpU_nuSSQQ", title: "Concept of Angle: Introduction", url: "https://youtu.be/OSpU_nuSSQQ?si=HsnScqm9XnpgNmPx" }, 
+    { id: "FzBTUK1d3qk", title: "Degree and Radian: Nakshatra Prediction", url: "https://youtu.be/FzBTUK1d3qk?si=mBxve68JnzsmZYji" } 
+];
+
+const PROFILE = { name: "Abhishek Kumar", role: "Physics Faculty (9+ yrs)", details: ["B.Tech (CSE)", "Ex-Faculty: Jaipuria School", "Ex-Faculty: S.P. College Pune", "Expert: Python, LaTeX"] };
+
+// --- 3D CAMERA & CANVAS ---
 const useOrbitControls = (ref, initialZoom = 30) => {
     const camera = useRef({ yaw: 0.5, pitch: 0.3, zoom: initialZoom });
     const drag = useRef({ active: false, x: 0, y: 0 });
-
     useEffect(() => {
         const el = ref.current;
         if(!el) return;
-
         const start = (e) => {
             drag.current.active = true;
             const t = e.touches ? e.touches[0] : e;
-            drag.current.x = t.clientX;
-            drag.current.y = t.clientY;
+            drag.current.x = t.clientX; drag.current.y = t.clientY;
         };
         const move = (e) => {
             if(!drag.current.active) return;
             const t = e.touches ? e.touches[0] : e;
-            const dx = t.clientX - drag.current.x;
-            const dy = t.clientY - drag.current.y;
-            camera.current.yaw += dx * 0.01;
-            camera.current.pitch += dy * 0.01;
-            camera.current.pitch = Math.max(-Math.PI/2 + 0.1, Math.min(Math.PI/2 - 0.1, camera.current.pitch));
-            drag.current.x = t.clientX;
-            drag.current.y = t.clientY;
+            const dx = t.clientX - drag.current.x; const dy = t.clientY - drag.current.y;
+            camera.current.yaw += dx * 0.01; camera.current.pitch += dy * 0.01;
+            camera.current.pitch = Math.max(-1.5, Math.min(1.5, camera.current.pitch));
+            drag.current.x = t.clientX; drag.current.y = t.clientY;
         };
         const end = () => drag.current.active = false;
-        
         el.addEventListener('mousedown', start); el.addEventListener('touchstart', start, {passive: false});
         window.addEventListener('mousemove', move); window.addEventListener('touchmove', move, {passive: false});
         window.addEventListener('mouseup', end); window.addEventListener('touchend', end);
-
         return () => {
             el.removeEventListener('mousedown', start); el.removeEventListener('touchstart', start);
             window.removeEventListener('mousemove', move); window.removeEventListener('touchmove', move);
@@ -121,24 +220,29 @@ const useOrbitControls = (ref, initialZoom = 30) => {
     return camera;
 };
 
-// --- SIM CANVAS ---
 const SimCanvas = ({ draw, initZoom=30 }) => {
     const canvasRef = useRef(null);
     const cam = useOrbitControls(canvasRef, initZoom);
+    const drawRef = useRef(draw);
+
+    useEffect(() => { drawRef.current = draw; }, [draw]);
 
     useEffect(() => {
         const cvs = canvasRef.current;
+        if(!cvs) return;
         const ctx = cvs.getContext('2d');
         let fid;
-
+        
         const render = () => {
-            const w = cvs.width = cvs.clientWidth;
+            if(!canvasRef.current) return;
+            const w = cvs.width = cvs.clientWidth; 
             const h = cvs.height = cvs.clientHeight;
             const cx = w/2, cy = h/2;
-
-            ctx.fillStyle = '#020617';
-            ctx.fillRect(0,0,w,h);
-
+            
+            const grad = ctx.createLinearGradient(0,0,0,h);
+            grad.addColorStop(0, '#020617'); grad.addColorStop(1, '#0f172a');
+            ctx.fillStyle = grad; ctx.fillRect(0,0,w,h);
+            
             const project = (x,y,z) => {
                 const { yaw, pitch, zoom } = cam.current;
                 let x1 = x * Math.cos(yaw) - z * Math.sin(yaw);
@@ -146,113 +250,43 @@ const SimCanvas = ({ draw, initZoom=30 }) => {
                 let y2 = y * Math.cos(pitch) - z1 * Math.sin(pitch);
                 let z2 = z1 * Math.cos(pitch) + y * Math.sin(pitch);
                 const scale = 500 / (500 - z2) * zoom;
-                return {
-                    x: cx + x1 * scale,
-                    y: cy - y2 * scale,
-                    s: scale,
-                    z: z2
-                };
+                return { x: cx + x1 * scale, y: cy - y2 * scale, s: scale, z: z2 };
             };
 
-            if(draw) draw(ctx, project, w, h);
-
+            if(drawRef.current) {
+                try { drawRef.current(ctx, project, w, h); } catch(e) { }
+            }
             fid = requestAnimationFrame(render);
         };
         render();
         return () => cancelAnimationFrame(fid);
-    }, [draw]);
+    }, []); 
 
     return <canvas ref={canvasRef} className="w-full h-full block" />;
 };
 
-// --- DATA ---
-const BOOKS = [
-    { 
-        id: 1, 
-        title: "Electronics and Circuits", 
-        desc: "Analog & Digital Systems", 
-        color: "bg-purple-100 text-purple-800",
-        links: [
-            { label: "Google Play", url: "https://play.google.com/store/books/details?id=retaEQAAQBAJ" },
-            { label: "Audiobook", url: "https://play.google.com/store/audiobooks/details?id=AQAAAEBKaVwpBM" }
-        ]
-    },
-    { 
-        id: 2, 
-        title: "Quantum Field Theory", 
-        desc: "Advanced Physics", 
-        color: "bg-slate-100 text-slate-800",
-        links: [
-            { label: "Amazon", url: "https://a.co/d/gR8mRuz" },
-            { label: "Pothi", url: "https://store.pothi.com/book/abhishek-kumar-quantum-field-theory-3/" }
-        ]
-    },
-    { 
-        id: 3, 
-        title: "Planetary Motion", 
-        desc: "Gravity Dynamics", 
-        color: "bg-blue-100 text-blue-800",
-        links: [
-            { label: "Amazon", url: "https://amzn.in/d/9HdcrQx" },
-            { label: "Flipkart", url: "https://www.flipkart.com/gravity-planetary-motion/p/itm84b6b08e673e0" }
-        ]
-    },
-    { 
-        id: 4, 
-        title: "Relativity: Speed of Light", 
-        desc: "Special Relativity", 
-        color: "bg-orange-100 text-orange-800",
-        links: [
-            { label: "Amazon", url: "https://amzn.in/d/36O230l" },
-            { label: "Flipkart", url: "https://dl.flipkart.com/s/pO6BTiuuuN" }
-        ]
-    }
-];
-
-const YOUTUBE_VIDEOS = [
-    {
-        id: "OSpU_nuSSQQ",
-        title: "Concept of Angle: Introduction",
-        url: "https://youtu.be/OSpU_nuSSQQ?si=HsnScqm9XnpgNmPx"
-    },
-    {
-        id: "FzBTUK1d3qk",
-        title: "Degree and Radian: Nakshatra Prediction",
-        url: "https://youtu.be/FzBTUK1d3qk?si=mBxve68JnzsmZYji"
-    }
-];
-
-const SIMS = [
-    { id: 'orbit', title: 'N-Body ODE Solver', desc: 'Coupled Differential Equations', color: 'bg-indigo-50 text-indigo-600' },
-    { id: 'em', title: 'Electromagnetism', desc: 'Maxwell & Lorentz Dynamics', color: 'bg-violet-50 text-violet-600' },
-    { id: 'thermo', title: 'Thermodynamics', desc: 'Stat Mech & 3 Laws', color: 'bg-orange-50 text-orange-600' },
-    { id: 'wave', title: 'Wave Motion', desc: 'String, Sound & Light', color: 'bg-pink-50 text-pink-600' },
-    { id: 'relativity', title: 'Relativity & Aberration', desc: 'The Speed of Light Paradox', color: 'bg-cyan-50 text-cyan-600' },
-];
-
-const PROFILE = { name: "Abhishek Kumar", role: "Physics Faculty (9+ yrs)", details: ["B.Tech (CSE)", "Ex-Faculty: Jaipuria School", "Ex-Faculty: S.P. College Pune", "Expert: Python, LaTeX"] };
-
-// --- HELPERS ---
 const parseEq = (eq) => {
     if (!eq) return "0";
-    let s = eq.toLowerCase().replace(/\s/g, '').replace(/\^/g, '**');
-    ['sin','cos','tan','sqrt','exp','log','abs','pi'].forEach(f => s = s.replaceAll(f, `Math.${f.toUpperCase() === 'PI' ? 'PI' : f}`));
-    return s;
+    try {
+        let s = eq.toLowerCase().replace(/\s/g, '').replace(/\^/g, '**');
+        ['sin','cos','tan','sqrt','exp','log','abs','pi'].forEach(f => s = s.replaceAll(f, `Math.${f.toUpperCase() === 'PI' ? 'PI' : f}`));
+        return s;
+    } catch(e) { return "0"; }
 };
 
 // --- COMPONENTS ---
 const EqInput = ({ label, sub, val, set, color }) => (
-    <div className={`bg-slate-900 p-3 rounded border-l-2 ${color} flex flex-col gap-1`}>
-        <span className="text-[10px] font-bold text-slate-500 uppercase">{label}</span>
+    <div className={`glass-card p-3 rounded-lg border-l-2 ${color} flex flex-col gap-1`}>
+        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-display">{label}</span>
         <div className="flex gap-2 items-center">
-            <span className="text-xs font-mono text-slate-400 shrink-0">{sub}</span>
-            <input value={val} onChange={e=>set(e.target.value)} className="input-field w-full rounded px-2 py-1 text-xs" spellCheck="false" />
+            <span className="text-xs font-mono text-slate-500 shrink-0">{sub}</span>
+            <input value={val} onChange={e=>set(e.target.value)} className="bg-slate-900/50 border border-slate-700 text-cyan-400 w-full rounded px-2 py-1 text-xs font-mono focus:border-cyan-400 outline-none" spellCheck="false" />
         </div>
     </div>
 );
 
 const GraphCard = ({ title, data, x, y, col }) => {
-    if(data.length < 2) return <div className="bg-slate-900 h-24 rounded border border-slate-800 flex items-center justify-center text-[10px] text-slate-600">No Data</div>;
+    if(data.length < 2) return <div className="glass-card h-24 rounded flex items-center justify-center text-[10px] text-slate-600 font-mono border border-white/5">AWAITING DATA...</div>;
     const xs = data.map(d=>d[x]); const ys = data.map(d=>d[y]);
     const minX = Math.min(...xs), maxX = Math.max(...xs);
     const minY = Math.min(...ys), maxY = Math.max(...ys);
@@ -262,9 +296,9 @@ const GraphCard = ({ title, data, x, y, col }) => {
         return `${px},${py}`;
     }).join(' ');
     return (
-        <div className="bg-slate-900 p-2 rounded border border-slate-800">
-            <div className="text-[10px] text-slate-400 mb-1">{title}</div>
-            <svg viewBox="0 0 100 100" className="w-full h-16 bg-slate-950/50 rounded overflow-hidden" preserveAspectRatio="none">
+        <div className="glass-card p-2 rounded-lg">
+            <div className="text-[10px] text-slate-400 mb-1 font-mono uppercase tracking-widest">{title}</div>
+            <svg viewBox="0 0 100 100" className="w-full h-16 bg-black/20 rounded overflow-hidden" preserveAspectRatio="none">
                 <polyline points={pts} fill="none" stroke={col} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
             </svg>
         </div>
@@ -313,33 +347,14 @@ const ODESolver = () => {
     const draw = (ctx, project, w, h) => {
         const hist = historyRef.current; 
         if (hist.length > 1) { 
-            ctx.beginPath(); 
-            ctx.strokeStyle = mode === 'flow' ? '#f59e0b' : '#3b82f6'; 
-            ctx.lineWidth = mode === 'flow' ? 1 : 2; 
-            ctx.globalAlpha = 0.6; 
-            for(let i=0; i<hist.length; i+=2) { 
-                const p = project(hist[i].x, hist[i].y, hist[i].z); 
-                if (i===0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); 
-            } 
-            ctx.stroke(); 
-            ctx.globalAlpha = 1.0; 
+            ctx.beginPath(); ctx.strokeStyle = mode === 'flow' ? '#f59e0b' : '#3b82f6'; ctx.lineWidth = mode === 'flow' ? 1 : 2; ctx.shadowBlur = 10; ctx.shadowColor = ctx.strokeStyle; ctx.globalAlpha = 0.8; 
+            for(let i=0; i<hist.length; i+=2) { const p = project(hist[i].x, hist[i].y, hist[i].z); if (i===0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); } 
+            ctx.stroke(); ctx.shadowBlur = 0; ctx.globalAlpha = 1.0; 
         }
-        const b = bodiesRef.current[0]; 
-        const p = project(b.x, b.y, b.z); 
-        const rad = Math.max(2, 8 * (p.s/20)); 
-        const col = mode === 'flow' ? '245, 158, 11' : '59, 130, 246'; 
-        const grad = ctx.createRadialGradient(p.x, p.y, rad*0.2, p.x, p.y, rad*3); 
-        grad.addColorStop(0, `rgba(${col}, 1)`); 
-        grad.addColorStop(1, `rgba(${col}, 0)`); 
-        ctx.fillStyle = grad; 
-        ctx.globalCompositeOperation = 'screen'; 
-        ctx.beginPath(); ctx.arc(p.x, p.y, rad*3, 0, 7); ctx.fill(); 
-        ctx.globalCompositeOperation = 'source-over'; 
-        ctx.fillStyle = '#fff'; 
-        ctx.beginPath(); ctx.arc(p.x, p.y, rad*0.5, 0, 7); ctx.fill(); 
+        const b = bodiesRef.current[0]; const p = project(b.x, b.y, b.z); const rad = Math.max(2, 8 * (p.s/20)); const col = mode === 'flow' ? '245, 158, 11' : '59, 130, 246'; const grad = ctx.createRadialGradient(p.x, p.y, rad*0.2, p.x, p.y, rad*3); grad.addColorStop(0, `rgba(${col}, 1)`); grad.addColorStop(1, `rgba(${col}, 0)`); ctx.fillStyle = grad; ctx.globalCompositeOperation = 'screen'; ctx.beginPath(); ctx.arc(p.x, p.y, rad*3, 0, 7); ctx.fill(); ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(p.x, p.y, rad*0.5, 0, 7); ctx.fill(); 
     };
 
-    return ( <div className={`flex flex-col h-[calc(100dvh-60px)] -m-4 relative ${fullScreen ? 'fixed inset-0 z-50 m-0 bg-slate-950' : ''}`}> <div className={`relative transition-all duration-500 bg-slate-900 overflow-hidden shadow-xl z-20 ${fullScreen ? 'absolute inset-0 h-full' : 'h-[35%] shrink-0'}`}> <SimCanvas draw={draw} initZoom={mode === 'flow' ? 6 : 25} /> <div className="absolute top-4 right-4 flex items-center gap-3"> <button onClick={() => { bodiesRef.current = [{x:0.1,y:0,z:0,vx:0,vy:0,vz:0}]; timeRef.current=0; historyRef.current=[]; setDisplayData([]); }} className="p-2 rounded-full bg-slate-800/80 text-slate-400 hover:text-white backdrop-blur"><Icons.Close /></button> <button onClick={() => setPlaying(!playing)} className="p-2 rounded-full bg-blue-600/90 text-white shadow-lg backdrop-blur">{playing ? "||" : "▶"}</button> <button onClick={() => setFullScreen(!fullScreen)} className="p-2 rounded-full bg-slate-800/80 text-slate-400 hover:text-white backdrop-blur">⛶</button> </div> </div> {!fullScreen && ( <div className="flex-1 flex flex-col bg-slate-950 overflow-hidden"> <div className="flex border-b border-slate-800 shrink-0"> {['eq', 'table', 'graph'].map(id => (<button key={id} onClick={() => setTab(id)} className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-widest transition ${tab === id ? 'text-blue-400 bg-slate-900 border-b-2 border-blue-500' : 'text-slate-600 hover:text-slate-400'}`}>{id}</button>))} </div> <div className="flex-1 overflow-hidden relative"> {tab === 'eq' && ( <div className="h-full overflow-y-auto p-4 space-y-4 no-scrollbar"> <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">{Object.entries(PRESETS).map(([k, v]) => (<button key={k} onClick={() => loadPreset(k)} className="shrink-0 px-3 py-1 rounded border border-slate-700 text-[10px] font-bold text-slate-400 hover:bg-slate-800 hover:text-white transition">{v.name}</button>))}</div> <div className="grid gap-3"> <EqInput label="X Logic" sub={mode==='newtonian'?"x''=":"x'="} val={eqs.x} set={v=>setEqs({...eqs,x:v})} color="border-blue-500" /> <EqInput label="Y Logic" sub={mode==='newtonian'?"y''=":"y'="} val={eqs.y} set={v=>setEqs({...eqs,y:v})} color="border-purple-500" /> <EqInput label="Z Logic" sub={mode==='newtonian'?"z''=":"z'="} val={eqs.z} set={v=>setEqs({...eqs,z:v})} color="border-emerald-500" /> </div> </div> )} {tab === 'table' && ( <div className="h-full flex flex-col"> <div className="p-2 flex justify-between bg-slate-900 border-b border-slate-800"><span className="text-[10px] text-slate-500 pt-1">Live Data</span><button onClick={()=>{const doc=new jspdf.jsPDF();doc.autoTable({head:[['T','X','Y','V']],body:displayData.map(d=>[d.t.toFixed(3),d.x.toFixed(4),d.y.toFixed(4),d.vx.toFixed(4)])});doc.save('ode_data.pdf')}} className="bg-slate-800 text-white text-[10px] px-3 py-1 rounded border border-slate-700">PDF</button></div> <div className="flex-1 overflow-auto scroller"><table className="data-table"><thead><tr><th>T</th><th>X</th><th>Y</th><th>Vx</th></tr></thead><tbody>{displayData.slice().reverse().map((r, i) => (<tr key={i}><td className="text-blue-400">{r.t.toFixed(3)}</td><td>{r.x.toFixed(4)}</td><td>{r.y.toFixed(4)}</td><td>{r.vx.toFixed(4)}</td></tr>))}</tbody></table></div> </div> )} {tab === 'graph' && (<div className="h-full overflow-y-auto p-4 space-y-4 no-scrollbar"><div className="grid grid-cols-2 gap-3"><GraphCard title="X vs Y" data={displayData} x="x" y="y" col="#3b82f6" /><GraphCard title="X vs T" data={displayData} x="t" y="x" col="#10b981" /></div></div>)} </div> </div> )} </div> );
+    return ( <div className={`flex flex-col h-[calc(100dvh-60px)] -m-4 relative ${fullScreen ? 'fixed inset-0 z-50 m-0 bg-slate-950' : ''}`}> <div className={`relative transition-all duration-500 bg-slate-900 overflow-hidden shadow-xl z-20 ${fullScreen ? 'absolute inset-0 h-full' : 'h-[35%] shrink-0'}`}> <SimCanvas draw={draw} initZoom={mode === 'flow' ? 6 : 25} /> <div className="absolute top-4 right-4 flex items-center gap-3"> <button onClick={() => { bodiesRef.current = [{x:0.1,y:0,z:0,vx:0,vy:0,vz:0}]; timeRef.current=0; historyRef.current=[]; setDisplayData([]); }} className="p-2 rounded-full bg-slate-800/80 text-slate-400 hover:text-white backdrop-blur border border-white/10"><Icons.Close /></button> <button onClick={() => setPlaying(!playing)} className="p-2 rounded-full bg-blue-600/90 text-white shadow-lg shadow-blue-500/50 backdrop-blur">{playing ? "||" : "▶"}</button> <button onClick={() => setFullScreen(!fullScreen)} className="p-2 rounded-full bg-slate-800/80 text-slate-400 hover:text-white backdrop-blur border border-white/10">⛶</button> </div> </div> {!fullScreen && ( <div className="flex-1 flex flex-col glass-panel overflow-hidden border-t-0"> <div className="flex border-b border-white/10 shrink-0 bg-slate-900/50"> {['eq', 'table', 'graph'].map(id => (<button key={id} onClick={() => setTab(id)} className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-widest transition font-display ${tab === id ? 'text-cyan-400 bg-white/5 border-b-2 border-cyan-500' : 'text-slate-500 hover:text-slate-300'}`}>{id}</button>))} </div> <div className="flex-1 overflow-hidden relative"> {tab === 'eq' && ( <div className="h-full overflow-y-auto p-4 space-y-4 scroller"> <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">{Object.entries(PRESETS).map(([k, v]) => (<button key={k} onClick={() => loadPreset(k)} className="shrink-0 px-3 py-1 rounded border border-slate-700 text-[10px] font-bold text-slate-400 hover:bg-cyan-900/50 hover:text-cyan-300 hover:border-cyan-500 transition font-display">{v.name}</button>))}</div> <div className="grid gap-3"> <EqInput label="X Logic" sub={mode==='newtonian'?"x''=":"x'="} val={eqs.x} set={v=>setEqs({...eqs,x:v})} color="border-blue-500" /> <EqInput label="Y Logic" sub={mode==='newtonian'?"y''=":"y'="} val={eqs.y} set={v=>setEqs({...eqs,y:v})} color="border-purple-500" /> <EqInput label="Z Logic" sub={mode==='newtonian'?"z''=":"z'="} val={eqs.z} set={v=>setEqs({...eqs,z:v})} color="border-emerald-500" /> </div> </div> )} {tab === 'table' && ( <div className="h-full flex flex-col"> <div className="p-2 flex justify-between border-b border-white/10"><span className="text-[10px] text-slate-500 pt-1 font-display uppercase">Data Stream</span><button onClick={()=>{const doc=new jspdf.jsPDF();doc.autoTable({head:[['T','X','Y','V']],body:displayData.map(d=>[d.t.toFixed(3),d.x.toFixed(4),d.y.toFixed(4),d.vx.toFixed(4)])});doc.save('ode_data.pdf')}} className="bg-slate-800 text-cyan-400 text-[10px] px-3 py-1 rounded border border-slate-700 hover:bg-cyan-900">EXPORT PDF</button></div> <div className="flex-1 overflow-auto scroller"><table className="data-table"><thead><tr><th>T</th><th>X</th><th>Y</th><th>Vx</th></tr></thead><tbody>{displayData.slice().reverse().map((r, i) => (<tr key={i}><td className="text-cyan-400 font-bold">{r.t.toFixed(3)}</td><td>{r.x.toFixed(4)}</td><td>{r.y.toFixed(4)}</td><td>{r.vx.toFixed(4)}</td></tr>))}</tbody></table></div> </div> )} {tab === 'graph' && (<div className="h-full overflow-y-auto p-4 space-y-4 scroller"><div className="grid grid-cols-2 gap-3"><GraphCard title="X vs Y" data={displayData} x="x" y="y" col="#3b82f6" /><GraphCard title="X vs T" data={displayData} x="t" y="x" col="#10b981" /></div></div>)} </div> </div> )} </div> );
 };
 
 // --- 2. EMSOLVER ---
@@ -349,277 +364,101 @@ const EMSolver = () => {
     const historyRef = useRef([]); const [displayData, setDisplayData] = useState([]); const bodiesRef = useRef([{ x: 0, y: 0, z: 0, vx: 2, vy: 0, vz: 0, Ex:0, Ey:0, Ez:0, Bx:0, By:0, Bz:0, Fx:0, Fy:0, Fz:0 }]); const timeRef = useRef(0); const fieldFuncRef = useRef(null); 
     useEffect(() => { try { fieldFuncRef.current = new Function('x','y','z','t', `return { Ex: ${parseEq(fields.Ex)}, Ey: ${parseEq(fields.Ey)}, Ez: ${parseEq(fields.Ez)}, Bx: ${parseEq(fields.Bx)}, By: ${parseEq(fields.By)}, Bz: ${parseEq(fields.Bz)} };`); } catch(e) { } }, [fields]);
     const loadPreset = (key) => { const p = PRESETS[key]; setFields(p); bodiesRef.current = [{ x:0,y:0,z:0,vx:2,vy:0,vz:0,Ex:0,Ey:0,Ez:0,Bx:0,By:0,Bz:0,Fx:0,Fy:0,Fz:0 }]; timeRef.current = 0; historyRef.current = []; setDisplayData([]); };
-    
-    useEffect(() => { let frameId; const loop = () => { if (!playing || !fieldFuncRef.current) return; const b = bodiesRef.current[0]; const t = timeRef.current; const calc = fieldFuncRef.current; const {q,m} = fields;
-            const getAccel = (x, y, z, vx, vy, vz, t) => { const f = calc(x, y, z, t); return { ax: (q/m)*(f.Ex+vy*f.Bz-vz*f.By), ay: (q/m)*(f.Ey+vz*f.Bx-vx*f.Bz), az: (q/m)*(f.Ez+vx*f.By-vy*f.Bx), f }; };
-            const k1 = getAccel(b.x, b.y, b.z, b.vx, b.vy, b.vz, t); const k2 = getAccel(b.x+b.vx*0.5*dt, b.y+b.vy*0.5*dt, b.z+b.vz*0.5*dt, b.vx+k1.ax*0.5*dt, b.vy+k1.ay*0.5*dt, b.vz+k1.az*0.5*dt, t+0.5*dt); const k3 = getAccel(b.x+b.vx*0.5*dt, b.y+b.vy*0.5*dt, b.z+b.vz*0.5*dt, b.vx+k2.ax*0.5*dt, b.vy+k2.ay*0.5*dt, b.vz+k2.az*0.5*dt, t+0.5*dt); const k4 = getAccel(b.x+b.vx*dt, b.y+b.vy*dt, b.z+b.vz*dt, b.vx+k3.ax*dt, b.vy+k3.ay*dt, b.vz+k3.az*dt, t+dt);
-            const nx = b.x + (dt/6)*(b.vx + 2*(b.vx+k1.ax*0.5*dt) + 2*(b.vx+k2.ax*0.5*dt) + (b.vx+k3.ax*dt)); const nvx = b.vx + (dt/6)*(k1.ax + 2*k2.ax + 2*k3.ax + k4.ax); const nvy = b.vy + (dt/6)*(k1.ay + 2*k2.ay + 2*k3.ay + k4.ay); const nvz = b.vz + (dt/6)*(k1.az + 2*k2.az + 2*k3.az + k4.az); const ny = b.y + b.vy*dt; const nz = b.z + b.vz*dt;
-            const f = calc(nx, ny, nz, t+dt); const newBody = { x:nx, y:ny, z:nz, vx:nvx, vy:nvy, vz:nvz, ...f, Fx:k4.ax*m, Fy:k4.ay*m, Fz:k4.az*m }; bodiesRef.current = [newBody]; timeRef.current += dt; historyRef.current.push(newBody); if (historyRef.current.length > 1500) historyRef.current.shift(); frameId = requestAnimationFrame(loop); }; if(playing) loop(); return () => cancelAnimationFrame(frameId); }, [playing, fields, dt]);
+    useEffect(() => { let frameId; const loop = () => { if (!playing || !fieldFuncRef.current) return; const b = bodiesRef.current[0]; const t = timeRef.current; const calc = fieldFuncRef.current; const {q,m} = fields; const getAccel = (x, y, z, vx, vy, vz, t) => { const f = calc(x, y, z, t); return { ax: (q/m)*(f.Ex+vy*f.Bz-vz*f.By), ay: (q/m)*(f.Ey+vz*f.Bx-vx*f.Bz), az: (q/m)*(f.Ez+vx*f.By-vy*f.Bx), f }; }; const k1 = getAccel(b.x, b.y, b.z, b.vx, b.vy, b.vz, t); const k2 = getAccel(b.x+b.vx*0.5*dt, b.y+b.vy*0.5*dt, b.z+b.vz*0.5*dt, b.vx+k1.ax*0.5*dt, b.vy+k1.ay*0.5*dt, b.vz+k1.az*0.5*dt, t+0.5*dt); const k3 = getAccel(b.x+b.vx*0.5*dt, b.y+b.vy*0.5*dt, b.z+b.vz*0.5*dt, b.vx+k2.ax*0.5*dt, b.vy+k2.ay*0.5*dt, b.vz+k2.az*0.5*dt, t+0.5*dt); const k4 = getAccel(b.x+b.vx*dt, b.y+b.vy*dt, b.z+b.vz*dt, b.vx+k3.ax*dt, b.vy+k3.ay*dt, b.vz+k3.az*dt, t+dt); const nx = b.x + (dt/6)*(b.vx + 2*(b.vx+k1.ax*0.5*dt) + 2*(b.vx+k2.ax*0.5*dt) + (b.vx+k3.ax*dt)); const nvx = b.vx + (dt/6)*(k1.ax + 2*k2.ax + 2*k3.ax + k4.ax); const nvy = b.vy + (dt/6)*(k1.ay + 2*k2.ay + 2*k3.ay + k4.ay); const nvz = b.vz + (dt/6)*(k1.az + 2*k2.az + 2*k3.az + k4.az); const ny = b.y + b.vy*dt; const nz = b.z + b.vz*dt; const f = calc(nx, ny, nz, t+dt); const newBody = { x:nx, y:ny, z:nz, vx:nvx, vy:nvy, vz:nvz, ...f, Fx:k4.ax*m, Fy:k4.ay*m, Fz:k4.az*m }; bodiesRef.current = [newBody]; timeRef.current += dt; historyRef.current.push(newBody); if (historyRef.current.length > 1500) historyRef.current.shift(); frameId = requestAnimationFrame(loop); }; if(playing) loop(); return () => cancelAnimationFrame(frameId); }, [playing, fields, dt]);
     useEffect(() => { const id = setInterval(() => { if(playing && historyRef.current.length > 0) { const last = historyRef.current[historyRef.current.length-1]; setDisplayData(prev => { const nu = [...prev, { t: timeRef.current, ...last }]; if(nu.length > 500) return nu.slice(-500); return nu; }); } }, 200); return () => clearInterval(id); }, [playing]);
-    
-    const draw = (ctx, project, w, h) => {
-        const hist = historyRef.current; 
-        if (hist.length > 1) { 
-            ctx.beginPath(); 
-            ctx.strokeStyle = '#a855f7'; 
-            ctx.lineWidth = 2; 
-            ctx.globalAlpha = 0.6; 
-            for(let i=0; i<hist.length; i+=2) { 
-                const p = project(hist[i].x, hist[i].y, hist[i].z); 
-                if (i===0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); 
-            } 
-            ctx.stroke(); 
-            ctx.globalAlpha = 1.0; 
-        }
-        const b = bodiesRef.current[0]; 
-        const p = project(b.x, b.y, b.z); 
-        const rad = Math.max(2, 6 * (p.s/20)); 
-        ctx.fillStyle = '#fff'; 
-        ctx.beginPath(); ctx.arc(p.x, p.y, rad, 0, 7); ctx.fill();
-        
-        const dv = (vx,vy,vz,c) => { 
-            const e = project(b.x+vx*0.5, b.y+vy*0.5, b.z+vz*0.5); 
-            ctx.beginPath(); ctx.strokeStyle = c; ctx.lineWidth = 2; 
-            ctx.moveTo(p.x, p.y); ctx.lineTo(e.x, e.y); ctx.stroke(); 
-        }; 
-        dv(b.Ex,b.Ey,b.Ez,'#fbbf24'); 
-        dv(b.Bx,b.By,b.Bz,'#22d3ee'); 
-        dv(b.Fx,b.Fy,b.Fz,'#ef4444'); 
-    };
-
-    return ( <div className={`flex flex-col h-[calc(100dvh-60px)] -m-4 relative ${fullScreen ? 'fixed inset-0 z-50 m-0 bg-slate-950' : ''}`}> <div className={`relative transition-all duration-500 bg-slate-900 overflow-hidden shadow-xl z-20 ${fullScreen ? 'absolute inset-0 h-full' : 'h-[35%] shrink-0'}`}> <SimCanvas draw={draw} initZoom={20} /> <div className="absolute top-4 right-4 flex items-center gap-3"> <button onClick={() => { bodiesRef.current=[{x:0,y:0,z:0,vx:2,vy:0,vz:0,Ex:0,Ey:0,Ez:0,Bx:0,By:0,Bz:0,Fx:0,Fy:0,Fz:0}]; timeRef.current=0; historyRef.current=[]; setDisplayData([]); }} className="p-2 rounded-full bg-slate-800/80 text-slate-400 hover:text-white backdrop-blur"><Icons.Close /></button> <button onClick={() => setPlaying(!playing)} className="p-2 rounded-full bg-blue-600/90 text-white shadow-lg backdrop-blur">{playing ? "||" : "▶"}</button> <button onClick={() => setFullScreen(!fullScreen)} className="p-2 rounded-full bg-slate-800/80 text-slate-400 hover:text-white backdrop-blur">⛶</button> </div> <div className="absolute bottom-4 left-4 text-[10px] font-mono text-slate-400"> <span className="text-yellow-400">E-Field</span> | <span className="text-cyan-400">B-Field</span> | <span className="text-red-400">Force</span> </div> </div> {!fullScreen && ( <div className="flex-1 flex flex-col bg-slate-950 overflow-hidden"> <div className="flex border-b border-slate-800 shrink-0"> {['fields', 'table', 'graph'].map(id => (<button key={id} onClick={() => setTab(id)} className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-widest transition ${tab === id ? 'text-blue-400 bg-slate-900 border-b-2 border-blue-500' : 'text-slate-600 hover:text-slate-400'}`}>{id}</button>))} </div> <div className="flex-1 overflow-hidden relative"> {tab === 'fields' && ( <div className="h-full overflow-y-auto p-4 space-y-4 no-scrollbar"> <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800 mb-4"> <div className="text-[10px] font-bold text-slate-500 uppercase mb-2">MAXWELL-LORENTZ DYNAMICS</div> <div className="font-mono text-white text-sm">d²r/dt² = (q/m)(E + v × B)</div> </div> <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">{Object.entries(PRESETS).map(([k, v]) => (<button key={k} onClick={() => loadPreset(k)} className="shrink-0 px-3 py-1 rounded border border-slate-700 text-[10px] font-bold text-slate-400 hover:bg-slate-800 hover:text-white transition">{v.name}</button>))}</div> <div className="grid grid-cols-2 gap-3"> <div className="space-y-2"><div className="text-[10px] font-bold text-yellow-500">Electric (E)</div><EqInput label="Ex" val={fields.Ex} set={v=>setFields({...fields,Ex:v})} color="border-yellow-500"/><EqInput label="Ey" val={fields.Ey} set={v=>setFields({...fields,Ey:v})} color="border-yellow-500"/><EqInput label="Ez" val={fields.Ez} set={v=>setFields({...fields,Ez:v})} color="border-yellow-500"/></div> <div className="space-y-2"><div className="text-[10px] font-bold text-cyan-500">Magnetic (B)</div><EqInput label="Bx" val={fields.Bx} set={v=>setFields({...fields,Bx:v})} color="border-cyan-500"/><EqInput label="By" val={fields.By} set={v=>setFields({...fields,By:v})} color="border-cyan-500"/><EqInput label="Bz" val={fields.Bz} set={v=>setFields({...fields,Bz:v})} color="border-cyan-500"/></div> </div> </div> )} {tab === 'table' && ( <div className="h-full flex flex-col"> <div className="p-2 flex justify-between bg-slate-900 border-b border-slate-800"><span className="text-[10px] text-slate-500 pt-1">Real-time Data</span><button onClick={()=>{const doc=new jspdf.jsPDF();doc.autoTable({head:[['T','X','Y','Vx','Vy']],body:displayData.map(d=>[d.t.toFixed(3),d.x.toFixed(4),d.y.toFixed(4),d.vx.toFixed(3),d.vy.toFixed(3)])});doc.save('em_data.pdf')}} className="bg-slate-800 text-white text-[10px] px-3 py-1 rounded border border-slate-700">PDF</button></div> <div className="flex-1 overflow-auto scroller"><table className="data-table"><thead><tr><th>T</th><th>X</th><th>Y</th><th>Vx</th><th>Vy</th></tr></thead><tbody>{displayData.slice().reverse().map((r, i) => (<tr key={i}><td className="text-blue-400">{r.t.toFixed(3)}</td><td>{r.x.toFixed(4)}</td><td>{r.y.toFixed(4)}</td><td>{r.vx.toFixed(3)}</td><td>{r.vy.toFixed(3)}</td></tr>))}</tbody></table></div> </div> )} {tab === 'graph' && (<div className="h-full overflow-y-auto p-4 space-y-4 no-scrollbar"><div className="grid grid-cols-2 gap-3"><GraphCard title="Pos X-Y" data={displayData} x="x" y="y" col="#fbbf24" /><GraphCard title="Phase Vx-Vy" data={displayData} x="vx" y="vy" col="#22d3ee" /></div></div>)} </div> </div> )} </div> );
+    const draw = (ctx, project, w, h) => { const hist = historyRef.current; if (hist.length > 1) { ctx.beginPath(); ctx.strokeStyle = '#a855f7'; ctx.lineWidth = 2; ctx.shadowBlur = 10; ctx.shadowColor = '#a855f7'; ctx.globalAlpha = 0.6; for(let i=0; i<hist.length; i+=2) { const p = project(hist[i].x, hist[i].y, hist[i].z); if (i===0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); } ctx.stroke(); ctx.shadowBlur = 0; ctx.globalAlpha = 1.0; } const b = bodiesRef.current[0]; const p = project(b.x, b.y, b.z); const rad = Math.max(2, 6 * (p.s/20)); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(p.x, p.y, rad, 0, 7); ctx.fill(); const dv = (vx,vy,vz,c) => { const e = project(b.x+vx*0.5, b.y+vy*0.5, b.z+vz*0.5); ctx.beginPath(); ctx.strokeStyle = c; ctx.lineWidth = 2; ctx.moveTo(p.x, p.y); ctx.lineTo(e.x, e.y); ctx.stroke(); }; dv(b.Ex,b.Ey,b.Ez,'#fbbf24'); dv(b.Bx,b.By,b.Bz,'#22d3ee'); dv(b.Fx,b.Fy,b.Fz,'#ef4444'); };
+    return ( <div className={`flex flex-col h-[calc(100dvh-60px)] -m-4 relative ${fullScreen ? 'fixed inset-0 z-50 m-0 bg-slate-950' : ''}`}> <div className={`relative transition-all duration-500 bg-slate-900 overflow-hidden shadow-xl z-20 ${fullScreen ? 'absolute inset-0 h-full' : 'h-[35%] shrink-0'}`}> <SimCanvas draw={draw} initZoom={20} /> <div className="absolute top-4 right-4 flex items-center gap-3"> <button onClick={() => { bodiesRef.current=[{x:0,y:0,z:0,vx:2,vy:0,vz:0,Ex:0,Ey:0,Ez:0,Bx:0,By:0,Bz:0,Fx:0,Fy:0,Fz:0}]; timeRef.current=0; historyRef.current=[]; setDisplayData([]); }} className="p-2 rounded-full bg-slate-800/80 text-slate-400 hover:text-white backdrop-blur border border-white/10"><Icons.Reset /></button> <button onClick={() => setPlaying(!playing)} className="p-2 rounded-full bg-blue-600/90 text-white shadow-lg shadow-blue-500/50 backdrop-blur">{playing ? "||" : "▶"}</button> <button onClick={() => setFullScreen(!fullScreen)} className="p-2 rounded-full bg-slate-800/80 text-slate-400 hover:text-white backdrop-blur border border-white/10">⛶</button> </div> <div className="absolute bottom-4 left-4 text-[10px] font-mono text-slate-400"> <span className="text-yellow-400 font-bold">E-Field</span> | <span className="text-cyan-400 font-bold">B-Field</span> | <span className="text-red-400 font-bold">Force</span> </div> </div> {!fullScreen && ( <div className="flex-1 flex flex-col glass-panel overflow-hidden border-t-0"> <div className="flex border-b border-white/10 shrink-0 bg-slate-900/50"> {['fields', 'table', 'graph'].map(id => (<button key={id} onClick={() => setTab(id)} className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-widest transition font-display ${tab === id ? 'text-cyan-400 bg-white/5 border-b-2 border-cyan-500' : 'text-slate-500 hover:text-slate-300'}`}>{id}</button>))} </div> <div className="flex-1 overflow-hidden relative"> {tab === 'fields' && ( <div className="h-full overflow-y-auto p-4 space-y-4 scroller"> <div className="glass-card p-4 rounded-xl border-l-4 border-violet-500 mb-4"> <div className="text-[10px] font-bold text-violet-400 uppercase mb-2 tracking-widest font-display">MAXWELL-LORENTZ DYNAMICS</div> <div className="font-mono text-white text-sm">d²r/dt² = (q/m)(E + v × B)</div> </div> <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">{Object.entries(PRESETS).map(([k, v]) => (<button key={k} onClick={() => loadPreset(k)} className="shrink-0 px-3 py-1 rounded border border-slate-700 text-[10px] font-bold text-slate-400 hover:bg-violet-900/50 hover:text-violet-300 hover:border-violet-500 transition font-display">{v.name}</button>))}</div> <div className="grid grid-cols-2 gap-3"> <div className="space-y-2"><div className="text-[10px] font-bold text-yellow-500 uppercase tracking-wider">Electric (E)</div><EqInput label="Ex" val={fields.Ex} set={v=>setFields({...fields,Ex:v})} color="border-yellow-500"/><EqInput label="Ey" val={fields.Ey} set={v=>setFields({...fields,Ey:v})} color="border-yellow-500"/><EqInput label="Ez" val={fields.Ez} set={v=>setFields({...fields,Ez:v})} color="border-yellow-500"/></div> <div className="space-y-2"><div className="text-[10px] font-bold text-cyan-500 uppercase tracking-wider">Magnetic (B)</div><EqInput label="Bx" val={fields.Bx} set={v=>setFields({...fields,Bx:v})} color="border-cyan-500"/><EqInput label="By" val={fields.By} set={v=>setFields({...fields,By:v})} color="border-cyan-500"/><EqInput label="Bz" val={fields.Bz} set={v=>setFields({...fields,Bz:v})} color="border-cyan-500"/></div> </div> </div> )} {tab === 'table' && ( <div className="h-full flex flex-col"> <div className="p-2 flex justify-between border-b border-white/10"><span className="text-[10px] text-slate-500 pt-1 font-display uppercase">Real-time Data</span><button onClick={()=>{const doc=new jspdf.jsPDF();doc.autoTable({head:[['T','X','Y','Vx','Vy']],body:displayData.map(d=>[d.t.toFixed(3),d.x.toFixed(4),d.y.toFixed(4),d.vx.toFixed(3),d.vy.toFixed(3)])});doc.save('em_data.pdf')}} className="bg-slate-800 text-cyan-400 text-[10px] px-3 py-1 rounded border border-slate-700 hover:bg-cyan-900">EXPORT PDF</button></div> <div className="flex-1 overflow-auto scroller"><table className="data-table"><thead><tr><th>T</th><th>X</th><th>Y</th><th>Vx</th><th>Vy</th></tr></thead><tbody>{displayData.slice().reverse().map((r, i) => (<tr key={i}><td className="text-violet-400 font-bold">{r.t.toFixed(3)}</td><td>{r.x.toFixed(4)}</td><td>{r.y.toFixed(4)}</td><td>{r.vx.toFixed(3)}</td><td>{r.vy.toFixed(3)}</td></tr>))}</tbody></table></div> </div> )} {tab === 'graph' && (<div className="h-full overflow-y-auto p-4 space-y-4 scroller"><div className="grid grid-cols-2 gap-3"><GraphCard title="Pos X-Y" data={displayData} x="x" y="y" col="#fbbf24" /><GraphCard title="Phase Vx-Vy" data={displayData} x="vx" y="vy" col="#22d3ee" /></div></div>)} </div> </div> )} </div> );
 };
 
-// --- 3. THERMOSOLVER ---
+// --- 3. THERMOSOLVER (FIXED SYNTAX) ---
 const ThermoSolver = () => {
-    const PRESETS = {
-        zero: { name: "Zeroth Law (Mixing)", force: "0", setup: "mixing" },
-        first: { name: "First Law (Work)", force: "0", setup: "work" },
-        second: { name: "Second Law (Entropy)", force: "0", setup: "entropy" },
-        real: { name: "Real Gas (VDW)", force: "4*((1/r)**12 - (1/r)**6)", setup: "mixing" }
-    };
+    const PRESETS = { zero: { name: "Zeroth Law (Mixing)", force: "0", setup: "mixing" }, first: { name: "First Law (Work)", force: "0", setup: "work" }, second: { name: "Second Law (Entropy)", force: "0", setup: "entropy" }, real: { name: "Real Gas (VDW)", force: "4*((1/r)**12 - (1/r)**6)", setup: "mixing" } };
     const [fullScreen, setFullScreen] = useState(false); const [tab, setTab] = useState('lab'); const [playing, setPlaying] = useState(true);
     const [config, setConfig] = useState({ N: 80, force: "0", heat: 0.5, volume: 1.0 });
     const bodiesRef = useRef([]); const statsRef = useRef({ P:0, T:0, V:0, S:0, U:0 }); const timeRef = useRef(0);
-    const [displayData, setDisplayData] = useState([]);
-    const funcRef = useRef(null);
-    
-    // Init Particles (3D Logic)
+    const [displayData, setDisplayData] = useState([]); const funcRef = useRef(null);
     const init = (mode) => {
         let arr = []; const N = config.N;
         for(let i=0; i<N; i++) {
             let x, y, z, vx, vy, vz, color;
-            if(mode === 'mixing') {
-                if(i < N/2) { x = Math.random()*40+5; y = Math.random()*40+5; z = Math.random()*40+5; vx = (Math.random()-0.5)*4; vy = (Math.random()-0.5)*4; vz = (Math.random()-0.5)*4; color = '#ef4444'; } 
-                else { x = Math.random()*40+55; y = Math.random()*40+5; z = Math.random()*40+5; vx = (Math.random()-0.5)*1; vy = (Math.random()-0.5)*1; vz = (Math.random()-0.5)*1; color = '#3b82f6'; }
-            } else if (mode === 'work') {
-                x = Math.random()*90+5; y = Math.random()*40+5; z = Math.random()*40+5; vx = (Math.random()-0.5)*3; vy = (Math.random()-0.5)*3; vz = (Math.random()-0.5)*3; color = '#fbbf24';
-            } else { 
-                x = Math.random()*20+5; y = Math.random()*20+5; z = Math.random()*20+5; vx = (Math.random()-0.5)*5; vy = (Math.random()-0.5)*5; vz = (Math.random()-0.5)*5; color = '#10b981';
-            }
+            if(mode === 'mixing') { if(i < N/2) { x = Math.random()*40+5; y = Math.random()*40+5; z = Math.random()*40+5; vx = (Math.random()-0.5)*4; vy = (Math.random()-0.5)*4; vz = (Math.random()-0.5)*4; color = '#ef4444'; } else { x = Math.random()*40+55; y = Math.random()*40+5; z = Math.random()*40+5; vx = (Math.random()-0.5)*1; vy = (Math.random()-0.5)*1; vz = (Math.random()-0.5)*1; color = '#3b82f6'; } } else if (mode === 'work') { x = Math.random()*90+5; y = Math.random()*40+5; z = Math.random()*40+5; vx = (Math.random()-0.5)*3; vy = (Math.random()-0.5)*3; vz = (Math.random()-0.5)*3; color = '#fbbf24'; } else { x = Math.random()*20+5; y = Math.random()*20+5; z = Math.random()*20+5; vx = (Math.random()-0.5)*5; vy = (Math.random()-0.5)*5; vz = (Math.random()-0.5)*5; color = '#10b981'; }
             arr.push({ x, y, z, vx, vy, vz, color });
         }
         bodiesRef.current = arr; timeRef.current = 0; setDisplayData([]);
     };
     useEffect(() => init(PRESETS.zero.setup), []);
-
-    // Physics Loop (3D Upgrade)
     useEffect(() => {
         if(!playing) return;
         try { funcRef.current = new Function('r', `return ${parseEq(config.force)}`); } catch(e) { return; }
         let frame;
         const loop = () => {
             const dt = 0.1; const boxW = 100 * config.volume; const boxH = 50; const boxD = 50;
-            let P_impulse = 0; let KE = 0;
-            const forceFunc = funcRef.current;
-            
-            // 1. Forces (Simplified N^2)
-            if(config.force !== "0" && forceFunc) {
-                for(let i=0; i<bodiesRef.current.length; i++){
-                    for(let j=i+1; j<bodiesRef.current.length; j++){
-                        const b1 = bodiesRef.current[i]; const b2 = bodiesRef.current[j];
-                        const dx = b2.x - b1.x; const dy = b2.y - b1.y; const dz = b2.z - b1.z;
-                        const r2 = dx*dx + dy*dy + dz*dz;
-                        if(r2 < 64 && r2 > 0.1) {
-                            const r = Math.sqrt(r2); const f = forceFunc(r);
-                            const fx = f * dx/r; const fy = f * dy/r; const fz = f * dz/r;
-                            b1.vx -= fx*dt; b1.vy -= fy*dt; b1.vz -= fz*dt;
-                            b2.vx += fx*dt; b2.vy += fy*dt; b2.vz += fz*dt;
-                        }
-                    }
-                }
-            }
-
-            // 2. Move & Walls
-            bodiesRef.current.forEach(b => {
-                b.x += b.vx * dt; b.y += b.vy * dt; b.z += b.vz * dt;
-                if(Math.random() < 0.05) { b.vx += (Math.random()-0.5)*config.heat; b.vy += (Math.random()-0.5)*config.heat; b.vz += (Math.random()-0.5)*config.heat; }
-                
-                if(b.x < 0) { b.x = 0; b.vx *= -1; P_impulse += Math.abs(b.vx); }
-                if(b.x > boxW) { b.x = boxW; b.vx *= -1; P_impulse += Math.abs(b.vx); }
-                if(b.y < 0) { b.y = 0; b.vy *= -1; P_impulse += Math.abs(b.vy); }
-                if(b.y > boxH) { b.y = boxH; b.vy *= -1; P_impulse += Math.abs(b.vy); }
-                if(b.z < 0) { b.z = 0; b.vz *= -1; P_impulse += Math.abs(b.vz); }
-                if(b.z > boxD) { b.z = boxD; b.vz *= -1; P_impulse += Math.abs(b.vz); }
-                
-                KE += 0.5 * (b.vx**2 + b.vy**2 + b.vz**2);
-                const speed = Math.sqrt(b.vx**2 + b.vy**2 + b.vz**2);
-                b.color = speed > 3 ? '#ef4444' : speed > 1.5 ? '#fbbf24' : '#3b82f6';
-            });
-
-            timeRef.current += dt;
-            if(Math.random() > 0.9) {
-                statsRef.current.P = P_impulse / (dt * 100);
-                statsRef.current.T = KE / bodiesRef.current.length;
-                statsRef.current.V = boxW * boxH * boxD;
-                statsRef.current.S = Math.log(Math.max(1, KE)) + Math.log(Math.max(1, boxW)); 
-            }
-            frame = requestAnimationFrame(loop);
+            let P_impulse = 0; let KE = 0; const forceFunc = funcRef.current;
+            if(config.force !== "0" && forceFunc) { for(let i=0; i<bodiesRef.current.length; i++){ for(let j=i+1; j<bodiesRef.current.length; j++){ const b1 = bodiesRef.current[i]; const b2 = bodiesRef.current[j]; const dx = b2.x - b1.x; const dy = b2.y - b1.y; const dz = b2.z - b1.z; const r2 = dx*dx + dy*dy + dz*dz; if(r2 < 64 && r2 > 0.1) { const r = Math.sqrt(r2); const f = forceFunc(r); const fx = f * dx/r; const fy = f * dy/r; const fz = f * dz/r; b1.vx -= fx*dt; b1.vy -= fy*dt; b1.vz -= fz*dt; b2.vx += fx*dt; b2.vy += fy*dt; b2.vz += fz*dt; } } } }
+            bodiesRef.current.forEach(b => { b.x += b.vx * dt; b.y += b.vy * dt; b.z += b.vz * dt; if(Math.random() < 0.05) { b.vx += (Math.random()-0.5)*config.heat; b.vy += (Math.random()-0.5)*config.heat; b.vz += (Math.random()-0.5)*config.heat; } if(b.x < 0) { b.x = 0; b.vx *= -1; P_impulse += Math.abs(b.vx); } if(b.x > boxW) { b.x = boxW; b.vx *= -1; P_impulse += Math.abs(b.vx); } if(b.y < 0) { b.y = 0; b.vy *= -1; P_impulse += Math.abs(b.vy); } if(b.y > boxH) { b.y = boxH; b.vy *= -1; P_impulse += Math.abs(b.vy); } if(b.z < 0) { b.z = 0; b.vz *= -1; P_impulse += Math.abs(b.vz); } if(b.z > boxD) { b.z = boxD; b.vz *= -1; P_impulse += Math.abs(b.vz); } KE += 0.5 * (b.vx**2 + b.vy**2 + b.vz**2); const speed = Math.sqrt(b.vx**2 + b.vy**2 + b.vz**2); b.color = speed > 3 ? '#ef4444' : speed > 1.5 ? '#fbbf24' : '#3b82f6'; });
+            timeRef.current += dt; if(Math.random() > 0.9) { statsRef.current.P = P_impulse / (dt * 100); statsRef.current.T = KE / bodiesRef.current.length; statsRef.current.V = boxW * boxH * boxD; statsRef.current.S = Math.log(Math.max(1, KE)) + Math.log(Math.max(1, boxW)); } frame = requestAnimationFrame(loop);
         };
         loop(); return () => cancelAnimationFrame(frame);
     }, [playing, config]);
-
-    useEffect(() => { const id = setInterval(() => { if(playing) { const s = statsRef.current; setDisplayData(p => { const n = [...p, { t: timeRef.current, ...s }]; return n.length > 500 ? n.slice(-500) : n; }); } }, 200); return () => clearInterval(id); }, [playing]);
-
+    useEffect(() => { 
+        const id = setInterval(() => { 
+            if(playing) { 
+                const s = statsRef.current; 
+                setDisplayData(p => { 
+                    const n = [...p, { t: timeRef.current, ...s }]; 
+                    // FIXED: Replaced bad ternary with correct one
+                    return n.length > 500 ? n.slice(-500) : n; 
+                }); 
+            } 
+        }, 200); 
+        return () => clearInterval(id); 
+    }, [playing]);
     const draw = (ctx, project, w, h) => {
         const boxW = 100*config.volume; const boxH = 50; const boxD = 50;
         const corners = [ [0,0,0], [boxW,0,0], [boxW,boxH,0], [0,boxH,0], [0,0,boxD], [boxW,0,boxD], [boxW,boxH,boxD], [0,boxH,boxD] ].map(c => project(c[0]-boxW/2, c[1]-boxH/2, c[2]-boxD/2));
-        ctx.strokeStyle = '#475569'; ctx.lineWidth = 1;
-        const edges = [[0,1],[1,2],[2,3],[3,0], [4,5],[5,6],[6,7],[7,4], [0,4],[1,5],[2,6],[3,7]];
-        edges.forEach(e => { ctx.beginPath(); ctx.moveTo(corners[e[0]].x, corners[e[0]].y); ctx.lineTo(corners[e[1]].x, corners[e[1]].y); ctx.stroke(); });
-        
-        bodiesRef.current.forEach(b => {
-            const p = project(b.x-boxW/2, b.y-boxH/2, b.z-boxD/2);
-            ctx.fillStyle = b.color; ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(2, 5*(p.s/20)), 0, 7); ctx.fill();
-        });
+        ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 1; const edges = [[0,1],[1,2],[2,3],[3,0], [4,5],[5,6],[6,7],[7,4], [0,4],[1,5],[2,6],[3,7]]; edges.forEach(e => { ctx.beginPath(); ctx.moveTo(corners[e[0]].x, corners[e[0]].y); ctx.lineTo(corners[e[1]].x, corners[e[1]].y); ctx.stroke(); });
+        bodiesRef.current.forEach(b => { const p = project(b.x-boxW/2, b.y-boxH/2, b.z-boxD/2); ctx.fillStyle = b.color; ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(2, 5*(p.s/20)), 0, 7); ctx.fill(); });
     };
-
-    return ( <div className={`flex flex-col h-[calc(100dvh-60px)] -m-4 relative ${fullScreen ? 'fixed inset-0 z-50 m-0 bg-slate-950' : ''}`}> <div className={`relative transition-all duration-500 bg-slate-900 overflow-hidden shadow-xl z-20 ${fullScreen ? 'absolute inset-0 h-full' : 'h-[35%] shrink-0'}`}> <SimCanvas draw={draw} initZoom={15} /> <div className="absolute top-4 right-4 flex items-center gap-3"> <button onClick={() => init('mixing')} className="p-2 rounded-full bg-slate-800/80 text-slate-400 hover:text-white backdrop-blur"><Icons.Close /></button> <button onClick={() => setPlaying(!playing)} className="p-2 rounded-full bg-blue-600/90 text-white shadow-lg backdrop-blur">{playing ? "||" : "▶"}</button> <button onClick={() => setFullScreen(!fullScreen)} className="p-2 rounded-full bg-slate-800/80 text-slate-400 hover:text-white backdrop-blur">⛶</button> </div> <div className="absolute bottom-4 left-4 text-[10px] font-mono text-slate-400 flex gap-4"> <span>P: {statsRef.current.P.toFixed(2)}</span><span>T: {statsRef.current.T.toFixed(2)}</span><span>S: {statsRef.current.S.toFixed(2)}</span> </div> </div> {!fullScreen && ( <div className="flex-1 flex flex-col bg-slate-950 overflow-hidden"> <div className="flex border-b border-slate-800 shrink-0"> {['lab', 'table', 'graph'].map(id => (<button key={id} onClick={() => setTab(id)} className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-widest transition ${tab === id ? 'text-blue-400 bg-slate-900 border-b-2 border-blue-500' : 'text-slate-600 hover:text-slate-400'}`}>{id}</button>))} </div> <div className="flex-1 overflow-hidden relative"> {tab === 'lab' && ( <div className="h-full overflow-y-auto p-4 space-y-4 no-scrollbar"> <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">{Object.entries(PRESETS).map(([k, v]) => (<button key={k} onClick={() => { setConfig({...config, force:v.force}); init(v.setup); }} className="shrink-0 px-3 py-1 rounded border border-slate-700 text-[10px] font-bold text-slate-400 hover:bg-slate-800 hover:text-white transition">{v.name}</button>))}</div> <div className="grid gap-4"> <div className="space-y-2"><div className="text-[10px] font-bold text-orange-500 uppercase">Process Control</div> <div className="glass-panel p-3 rounded flex flex-col gap-2"> <div className="flex justify-between text-xs text-slate-400"><span>Heat Injection (T)</span><span>{config.heat}</span></div> <input type="range" min="0" max="2" step="0.1" value={config.heat} onChange={e=>setConfig({...config, heat:parseFloat(e.target.value)})} className="w-full h-1 bg-orange-900 rounded appearance-none accent-orange-500" /> <div className="flex justify-between text-xs text-slate-400 mt-2"><span>Volume (V)</span><span>{config.volume}</span></div> <input type="range" min="0.3" max="1" step="0.1" value={config.volume} onChange={e=>setConfig({...config, volume:parseFloat(e.target.value)})} className="w-full h-1 bg-blue-900 rounded appearance-none accent-blue-500" /> </div> </div> <EqInput label="Interaction Potential F(r)" sub="Force =" val={config.force} set={v=>setConfig({...config, force:v})} color="border-emerald-500" /> </div> </div> )} {tab === 'table' && ( <div className="h-full flex flex-col"> <div className="p-2 flex justify-between bg-slate-900 border-b border-slate-800"><span className="text-[10px] text-slate-500 pt-1">Thermodynamic State</span><button onClick={()=>{const doc=new jspdf.jsPDF();doc.autoTable({head:[['Time','P','V','T','S']],body:displayData.map(d=>[d.t.toFixed(2),d.P.toFixed(2),d.V.toFixed(0),d.T.toFixed(2),d.S.toFixed(3)])});doc.save('thermo_data.pdf')}} className="bg-slate-800 text-white text-[10px] px-3 py-1 rounded border border-slate-700">PDF</button></div> <div className="flex-1 overflow-auto scroller"><table className="data-table"><thead><tr><th>t</th><th>P</th><th>V</th><th>T</th><th>S</th></tr></thead><tbody>{displayData.slice().reverse().map((r, i) => (<tr key={i}><td className="text-blue-400">{r.t.toFixed(1)}</td><td>{r.P.toFixed(2)}</td><td>{r.V.toFixed(0)}</td><td>{r.T.toFixed(2)}</td><td>{r.S.toFixed(2)}</td></tr>))}</tbody></table></div> </div> )} {tab === 'graph' && (<div className="h-full overflow-y-auto p-4 space-y-4 no-scrollbar"><div className="grid grid-cols-2 gap-3"><GraphCard title="PV Diagram" data={displayData} x="V" y="P" col="#fbbf24" /><GraphCard title="Entropy vs Time" data={displayData} x="t" y="S" col="#10b981" /></div></div>)} </div> </div> )} </div> );
+    return ( <div className={`flex flex-col h-[calc(100dvh-60px)] -m-4 relative ${fullScreen ? 'fixed inset-0 z-50 m-0 bg-slate-950' : ''}`}> <div className={`relative transition-all duration-500 bg-slate-900 overflow-hidden shadow-xl z-20 ${fullScreen ? 'absolute inset-0 h-full' : 'h-[35%] shrink-0'}`}> <SimCanvas draw={draw} initZoom={15} /> <div className="absolute top-4 right-4 flex items-center gap-3"> <button onClick={() => init('mixing')} className="p-2 rounded-full bg-slate-800/80 text-slate-400 hover:text-white backdrop-blur border border-white/10"><Icons.Reset /></button> <button onClick={() => setPlaying(!playing)} className="p-2 rounded-full bg-blue-600/90 text-white shadow-lg shadow-blue-500/50 backdrop-blur">{playing ? "||" : "▶"}</button> <button onClick={() => setFullScreen(!fullScreen)} className="p-2 rounded-full bg-slate-800/80 text-slate-400 hover:text-white backdrop-blur border border-white/10">⛶</button> </div> <div className="absolute bottom-4 left-4 text-[10px] font-mono text-slate-400 flex gap-4 font-bold"> <span className="text-amber-400">P: {statsRef.current.P.toFixed(2)}</span><span className="text-red-400">T: {statsRef.current.T.toFixed(2)}</span><span className="text-blue-400">S: {statsRef.current.S.toFixed(2)}</span> </div> </div> {!fullScreen && ( <div className="flex-1 flex flex-col glass-panel overflow-hidden border-t-0"> <div className="flex border-b border-white/10 shrink-0 bg-slate-900/50"> {['lab', 'table', 'graph'].map(id => (<button key={id} onClick={() => setTab(id)} className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-widest transition font-display ${tab === id ? 'text-amber-400 bg-white/5 border-b-2 border-amber-500' : 'text-slate-500 hover:text-slate-300'}`}>{id}</button>))} </div> <div className="flex-1 overflow-hidden relative"> {tab === 'lab' && ( <div className="h-full overflow-y-auto p-4 space-y-4 scroller"> <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">{Object.entries(PRESETS).map(([k, v]) => (<button key={k} onClick={() => { setConfig({...config, force:v.force}); init(v.setup); }} className="shrink-0 px-3 py-1 rounded border border-slate-700 text-[10px] font-bold text-slate-400 hover:bg-amber-900/50 hover:text-amber-300 hover:border-amber-500 transition font-display">{v.name}</button>))}</div> <div className="grid gap-4"> <div className="space-y-2"><div className="text-[10px] font-bold text-orange-500 uppercase tracking-widest font-display">Process Control</div> <div className="glass-card p-3 rounded flex flex-col gap-2"> <div className="flex justify-between text-xs text-slate-400"><span>Heat Injection (T)</span><span className="font-mono text-orange-400">{config.heat}</span></div> <input type="range" min="0" max="2" step="0.1" value={config.heat} onChange={e=>setConfig({...config, heat:parseFloat(e.target.value)})} className="w-full h-1 bg-orange-900/50 rounded appearance-none accent-orange-500 cursor-pointer" /> <div className="flex justify-between text-xs text-slate-400 mt-2"><span>Volume (V)</span><span className="font-mono text-blue-400">{config.volume}</span></div> <input type="range" min="0.3" max="1" step="0.1" value={config.volume} onChange={e=>setConfig({...config, volume:parseFloat(e.target.value)})} className="w-full h-1 bg-blue-900/50 rounded appearance-none accent-blue-500 cursor-pointer" /> </div> </div> <EqInput label="Interaction Potential F(r)" sub="Force =" val={config.force} set={v=>setConfig({...config, force:v})} color="border-emerald-500" /> </div> </div> )} {tab === 'table' && ( <div className="h-full flex flex-col"> <div className="p-2 flex justify-between border-b border-white/10"><span className="text-[10px] text-slate-500 pt-1 font-display uppercase">Thermodynamic State</span><button onClick={()=>{const doc=new jspdf.jsPDF();doc.autoTable({head:[['Time','P','V','T','S']],body:displayData.map(d=>[d.t.toFixed(2),d.P.toFixed(2),d.V.toFixed(0),d.T.toFixed(2),d.S.toFixed(3)])});doc.save('thermo_data.pdf')}} className="bg-slate-800 text-amber-400 text-[10px] px-3 py-1 rounded border border-slate-700 hover:bg-amber-900">EXPORT PDF</button></div> <div className="flex-1 overflow-auto scroller"><table className="data-table"><thead><tr><th>t</th><th>P</th><th>V</th><th>T</th><th>S</th></tr></thead><tbody>{displayData.slice().reverse().map((r, i) => (<tr key={i}><td className="text-amber-400 font-bold">{r.t.toFixed(1)}</td><td>{r.P.toFixed(2)}</td><td>{r.V.toFixed(0)}</td><td>{r.T.toFixed(2)}</td><td>{r.S.toFixed(2)}</td></tr>))}</tbody></table></div> </div> )} {tab === 'graph' && (<div className="h-full overflow-y-auto p-4 space-y-4 scroller"><div className="grid grid-cols-2 gap-3"><GraphCard title="PV Diagram" data={displayData} x="V" y="P" col="#fbbf24" /><GraphCard title="Entropy vs Time" data={displayData} x="t" y="S" col="#10b981" /></div></div>)} </div> </div> )} </div> );
 };
 
 // --- 4. WAVESOLVER ---
 const WaveSolver = () => {
-    const PRESETS = {
-        string: { name: "String (Transverse)", type: 'trans', eq: "3 * sin(x - 2*t)", desc: "y = A sin(kx - wt)" },
-        sound: { name: "Sound (Pressure)", type: 'long', eq: "3 * cos(x - 3*t)", desc: "y represents density" },
-        light: { name: "Light (EM)", type: 'light', eq: "3 * sin(x - 4*t)", desc: "E & B Fields" },
-        beat: { name: "Beats", type: 'trans', eq: "2*sin(x-10*t) + 2*sin(x-12*t)", desc: "Superposition" }
-    };
+    const PRESETS = { string: { name: "String (Transverse)", type: 'trans', eq: "3 * sin(x - 2*t)", desc: "y = A sin(kx - wt)" }, sound: { name: "Sound (Pressure)", type: 'long', eq: "3 * cos(x - 3*t)", desc: "y represents density" }, light: { name: "Light (EM)", type: 'light', eq: "3 * sin(x - 4*t)", desc: "E & B Fields" }, beat: { name: "Beats", type: 'trans', eq: "2*sin(x-10*t) + 2*sin(x-12*t)", desc: "Superposition" } };
     const [fullScreen, setFullScreen] = useState(false); const [tab, setTab] = useState('sim'); const [playing, setPlaying] = useState(true);
     const [config, setConfig] = useState(PRESETS.string); const [eqStr, setEqStr] = useState(PRESETS.string.eq);
     const timeRef = useRef(0); const funcRef = useRef(null); const [displayData, setDisplayData] = useState([]);
-
     useEffect(() => { try { funcRef.current = new Function('x','t', `return ${parseEq(eqStr)}`); } catch(e) {} }, [eqStr]);
-
-    // Physics Loop
-    useEffect(() => {
-        if(!playing) return;
-        let frame;
-        const loop = () => {
-            timeRef.current += 0.05;
-            if(funcRef.current && Math.random() > 0.8) {
-                const y0 = funcRef.current(0, timeRef.current);
-                setDisplayData(p => { const n = [...p, { t: timeRef.current, y: y0 }]; return n.length > 500 ? n.slice(-500) : n; });
-            }
-            frame = requestAnimationFrame(loop);
-        };
-        loop(); return () => cancelAnimationFrame(frame);
-    }, [playing]);
-
+    useEffect(() => { if(!playing) return; let frame; const loop = () => { timeRef.current += 0.05; if(funcRef.current && Math.random() > 0.8) { const y0 = funcRef.current(0, timeRef.current); setDisplayData(p => { const n = [...p, { t: timeRef.current, y: y0 }]; return n.length > 500 ? n.slice(-500) : n; }); } frame = requestAnimationFrame(loop); }; loop(); return () => cancelAnimationFrame(frame); }, [playing]);
     const draw = (ctx, project, w, h) => {
-        const t = timeRef.current;
-        const f = funcRef.current;
-        if(!f) return;
-
-        // Draw Axis
-        const start = project(-20, 0, 0); const end = project(20, 0, 0);
-        ctx.beginPath(); ctx.strokeStyle = '#334155'; ctx.moveTo(start.x, start.y); ctx.lineTo(end.x, end.y); ctx.stroke();
-
-        const points = [];
-        for(let x = -15; x <= 15; x += 0.5) {
-            const y = f(x, t);
-            points.push({x, y});
-        }
-
-        if(config.type === 'trans' || config.type === 'beat') {
-            ctx.beginPath(); ctx.strokeStyle = '#ec4899'; ctx.lineWidth = 2;
-            points.forEach((pt, i) => {
-                const p = project(pt.x, pt.y, 0);
-                if(i===0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
-                // Particle view
-                ctx.fillStyle = '#fbcfe8'; ctx.beginPath(); ctx.arc(p.x, p.y, 2, 0, 7); ctx.fill();
-            });
-            ctx.stroke();
-        } 
-        else if (config.type === 'long') {
-            // Longitudinal: Map amplitude to X-displacement
-            points.forEach(pt => {
-                const dx = pt.y * 0.3; // Scale amp to displacement
-                const p = project(pt.x + dx, 0, 0);
-                // Draw vertical lines to show compression
-                const top = project(pt.x + dx, 2, 0); const bot = project(pt.x + dx, -2, 0);
-                ctx.beginPath(); ctx.strokeStyle = `rgba(236, 72, 153, ${0.3 + Math.abs(pt.y)*0.2})`; 
-                ctx.moveTo(top.x, top.y); ctx.lineTo(bot.x, bot.y); ctx.stroke();
-                // Particles
-                ctx.fillStyle = '#ec4899'; ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(1, 4-Math.abs(dx)), 0, 7); ctx.fill();
-            });
-        }
-        else if (config.type === 'light') {
-            // E-Field (Vertical)
-            ctx.beginPath(); ctx.strokeStyle = '#fbbf24'; ctx.lineWidth = 2;
-            points.forEach((pt, i) => { const p = project(pt.x, pt.y, 0); if(i===0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); });
-            ctx.stroke();
-            // B-Field (Horizontal/Z)
-            ctx.beginPath(); ctx.strokeStyle = '#22d3ee'; ctx.lineWidth = 2;
-            points.forEach((pt, i) => { const p = project(pt.x, 0, pt.y); if(i===0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); });
-            ctx.stroke();
-            // Vectors
-            points.forEach((pt, i) => {
-                if(i%4!==0) return;
-                const o = project(pt.x, 0, 0); const pe = project(pt.x, pt.y, 0); const pb = project(pt.x, 0, pt.y);
-                ctx.beginPath(); ctx.strokeStyle='#fbbf2444'; ctx.moveTo(o.x, o.y); ctx.lineTo(pe.x, pe.y); ctx.stroke();
-                ctx.beginPath(); ctx.strokeStyle='#22d3ee44'; ctx.moveTo(o.x, o.y); ctx.lineTo(pb.x, pb.y); ctx.stroke();
-            });
-        }
+        const t = timeRef.current; const f = funcRef.current; if(!f) return;
+        const start = project(-20, 0, 0); const end = project(20, 0, 0); ctx.beginPath(); ctx.strokeStyle = '#475569'; ctx.moveTo(start.x, start.y); ctx.lineTo(end.x, end.y); ctx.stroke();
+        const points = []; for(let x = -15; x <= 15; x += 0.5) { points.push({x, y: f(x, t)}); }
+        if(config.type === 'trans' || config.type === 'beat') { ctx.beginPath(); ctx.strokeStyle = '#ec4899'; ctx.lineWidth = 2; ctx.shadowBlur = 10; ctx.shadowColor = '#ec4899'; points.forEach((pt, i) => { const p = project(pt.x, pt.y, 0); if(i===0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); ctx.fillStyle = '#fbcfe8'; ctx.beginPath(); ctx.arc(p.x, p.y, 2, 0, 7); ctx.fill(); }); ctx.stroke(); ctx.shadowBlur = 0; } 
+        else if (config.type === 'long') { points.forEach(pt => { const dx = pt.y * 0.3; const p = project(pt.x + dx, 0, 0); const top = project(pt.x + dx, 2, 0); const bot = project(pt.x + dx, -2, 0); ctx.beginPath(); ctx.strokeStyle = `rgba(236, 72, 153, ${0.3 + Math.abs(pt.y)*0.2})`; ctx.moveTo(top.x, top.y); ctx.lineTo(bot.x, bot.y); ctx.stroke(); ctx.fillStyle = '#ec4899'; ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(1, 4-Math.abs(dx)), 0, 7); ctx.fill(); }); }
+        else if (config.type === 'light') { ctx.beginPath(); ctx.strokeStyle = '#fbbf24'; ctx.lineWidth = 2; ctx.shadowBlur = 8; ctx.shadowColor = '#fbbf24'; points.forEach((pt, i) => { const p = project(pt.x, pt.y, 0); if(i===0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); }); ctx.stroke(); ctx.beginPath(); ctx.strokeStyle = '#22d3ee'; ctx.lineWidth = 2; ctx.shadowBlur = 8; ctx.shadowColor = '#22d3ee'; points.forEach((pt, i) => { const p = project(pt.x, 0, pt.y); if(i===0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); }); ctx.stroke(); ctx.shadowBlur = 0; }
     };
-
-    return ( <div className={`flex flex-col h-[calc(100dvh-60px)] -m-4 relative ${fullScreen ? 'fixed inset-0 z-50 m-0 bg-slate-950' : ''}`}> <div className={`relative transition-all duration-500 bg-slate-900 overflow-hidden shadow-xl z-20 ${fullScreen ? 'absolute inset-0 h-full' : 'h-[35%] shrink-0'}`}> <SimCanvas draw={draw} initZoom={25} /> <div className="absolute top-4 right-4 flex items-center gap-3"> <button onClick={() => { timeRef.current=0; setDisplayData([]); }} className="p-2 rounded-full bg-slate-800/80 text-slate-400 hover:text-white backdrop-blur"><Icons.Reset /></button> <button onClick={() => setPlaying(!playing)} className="p-2 rounded-full bg-blue-600/90 text-white shadow-lg backdrop-blur">{playing ? "||" : "▶"}</button> <button onClick={() => setFullScreen(!fullScreen)} className="p-2 rounded-full bg-slate-800/80 text-slate-400 hover:text-white backdrop-blur">⛶</button> </div> <div className="absolute bottom-4 left-4 text-[10px] font-mono text-slate-400"> <span className="text-pink-400 font-bold">{config.name}</span> | y(x,t) </div> </div> {!fullScreen && ( <div className="flex-1 flex flex-col bg-slate-950 overflow-hidden"> <div className="flex border-b border-slate-800 shrink-0"> {['sim', 'table', 'graph'].map(id => (<button key={id} onClick={() => setTab(id)} className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-widest transition ${tab === id ? 'text-blue-400 bg-slate-900 border-b-2 border-blue-500' : 'text-slate-600 hover:text-slate-400'}`}>{id}</button>))} </div> <div className="flex-1 overflow-hidden relative"> {tab === 'sim' && ( <div className="h-full overflow-y-auto p-4 space-y-4 no-scrollbar"> <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800 mb-4"> <div className="text-[10px] font-bold text-slate-500 uppercase mb-2">Wave Equation</div> <div className="font-mono text-white text-sm">y(x,t) = A sin(kx - ωt + φ)</div> </div> <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">{Object.entries(PRESETS).map(([k, v]) => (<button key={k} onClick={() => { setConfig(v); setEqStr(v.eq); }} className="shrink-0 px-3 py-1 rounded border border-slate-700 text-[10px] font-bold text-slate-400 hover:bg-slate-800 hover:text-white transition">{v.name}</button>))}</div> <EqInput label="Wave Function y(x,t)" sub="y =" val={eqStr} set={setEqStr} color="border-pink-500" /> </div> )} {tab === 'table' && ( <div className="h-full flex flex-col"> <div className="p-2 flex justify-between bg-slate-900 border-b border-slate-800"><span className="text-[10px] text-slate-500 pt-1">Source Displacement (x=0)</span><button onClick={()=>{const doc=new jspdf.jsPDF();doc.autoTable({head:[['Time','Y (x=0)']],body:displayData.map(d=>[d.t.toFixed(2),d.y.toFixed(4)])});doc.save('wave_data.pdf')}} className="bg-slate-800 text-white text-[10px] px-3 py-1 rounded border border-slate-700">PDF</button></div> <div className="flex-1 overflow-auto scroller"><table className="data-table"><thead><tr><th>t</th><th>y (x=0)</th></tr></thead><tbody>{displayData.slice().reverse().map((r, i) => (<tr key={i}><td className="text-blue-400">{r.t.toFixed(2)}</td><td>{r.y.toFixed(4)}</td></tr>))}</tbody></table></div> </div> )} {tab === 'graph' && (<div className="h-full overflow-y-auto p-4 space-y-4 no-scrollbar"><GraphCard title="Source Oscillation (y vs t at x=0)" data={displayData} x="t" y="y" col="#ec4899" /></div>)} </div> </div> )} </div> );
+    return ( <div className={`flex flex-col h-[calc(100dvh-60px)] -m-4 relative ${fullScreen ? 'fixed inset-0 z-50 m-0 bg-slate-950' : ''}`}> <div className={`relative transition-all duration-500 bg-slate-900 overflow-hidden shadow-xl z-20 ${fullScreen ? 'absolute inset-0 h-full' : 'h-[35%] shrink-0'}`}> <SimCanvas draw={draw} initZoom={25} /> <div className="absolute top-4 right-4 flex items-center gap-3"> <button onClick={() => { timeRef.current=0; setDisplayData([]); }} className="p-2 rounded-full bg-slate-800/80 text-slate-400 hover:text-white backdrop-blur border border-white/10"><Icons.Reset /></button> <button onClick={() => setPlaying(!playing)} className="p-2 rounded-full bg-blue-600/90 text-white shadow-lg shadow-blue-500/50 backdrop-blur">{playing ? "||" : "▶"}</button> <button onClick={() => setFullScreen(!fullScreen)} className="p-2 rounded-full bg-slate-800/80 text-slate-400 hover:text-white backdrop-blur border border-white/10">⛶</button> </div> <div className="absolute bottom-4 left-4 text-[10px] font-mono text-slate-400"> <span className="text-pink-400 font-bold">{config.name}</span> | y(x,t) </div> </div> {!fullScreen && ( <div className="flex-1 flex flex-col glass-panel overflow-hidden border-t-0"> <div className="flex border-b border-white/10 shrink-0 bg-slate-900/50"> {['sim', 'table', 'graph'].map(id => (<button key={id} onClick={() => setTab(id)} className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-widest transition font-display ${tab === id ? 'text-pink-400 bg-white/5 border-b-2 border-pink-500' : 'text-slate-500 hover:text-slate-300'}`}>{id}</button>))} </div> <div className="flex-1 overflow-hidden relative"> {tab === 'sim' && ( <div className="h-full overflow-y-auto p-4 space-y-4 scroller"> <div className="glass-card p-4 rounded-xl border-l-4 border-pink-500 mb-4"> <div className="text-[10px] font-bold text-pink-400 uppercase mb-2 font-display tracking-widest">Wave Equation</div> <div className="font-mono text-white text-sm">y(x,t) = A sin(kx - ωt + φ)</div> </div> <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">{Object.entries(PRESETS).map(([k, v]) => (<button key={k} onClick={() => { setConfig(v); setEqStr(v.eq); }} className="shrink-0 px-3 py-1 rounded border border-slate-700 text-[10px] font-bold text-slate-400 hover:bg-pink-900/50 hover:text-pink-300 hover:border-pink-500 transition font-display">{v.name}</button>))}</div> <EqInput label="Wave Function y(x,t)" sub="y =" val={eqStr} set={setEqStr} color="border-pink-500" /> </div> )} {tab === 'table' && ( <div className="h-full flex flex-col"> <div className="p-2 flex justify-between border-b border-white/10"><span className="text-[10px] text-slate-500 pt-1 font-display uppercase">Source Displacement (x=0)</span><button onClick={()=>{const doc=new jspdf.jsPDF();doc.autoTable({head:[['Time','Y (x=0)']],body:displayData.map(d=>[d.t.toFixed(2),d.y.toFixed(4)])});doc.save('wave_data.pdf')}} className="bg-slate-800 text-pink-400 text-[10px] px-3 py-1 rounded border border-slate-700 hover:bg-pink-900">EXPORT PDF</button></div> <div className="flex-1 overflow-auto scroller"><table className="data-table"><thead><tr><th>t</th><th>y (x=0)</th></tr></thead><tbody>{displayData.slice().reverse().map((r, i) => (<tr key={i}><td className="text-pink-400 font-bold">{r.t.toFixed(2)}</td><td>{r.y.toFixed(4)}</td></tr>))}</tbody></table></div> </div> )} {tab === 'graph' && (<div className="h-full overflow-y-auto p-4 space-y-4 scroller"><GraphCard title="Source Oscillation (y vs t at x=0)" data={displayData} x="t" y="y" col="#ec4899" /></div>)} </div> </div> )} </div> );
 };
 
-// --- 5. RELATIVITY SOLVER (NEW: REPLACES OPTICS) ---
-// --- 5. RELATIVITY SOLVER (UPDATED: INFOGRAPHIC MODE) ---
+// --- 5. RELATIVITY SOLVER ---
 const RelativitySolver = () => {
-    const [fullScreen, setFullScreen] = useState(false); 
-    const [tab, setTab] = useState('story'); 
-    const [speed, setSpeed] = useState(50); // Default speed
-    const timeRef = useRef(0);
-
-    // --- PHYSICS LOOP ---
-    useEffect(() => {
-        let frame;
-        const loop = () => { 
-            timeRef.current += 1; 
-            frame = requestAnimationFrame(loop); 
-        };
-        loop(); 
-        return () => cancelAnimationFrame(frame);
-    }, []);
-
-    // --- CANVAS DRAWING (The Rain/Umbrella Analogy) ---
+    const [fullScreen, setFullScreen] = useState(false); const [tab, setTab] = useState('story'); const [speed, setSpeed] = useState(50); const timeRef = useRef(0);
+    useEffect(() => { let frame; const loop = () => { timeRef.current += 1; frame = requestAnimationFrame(loop); }; loop(); return () => cancelAnimationFrame(frame); }, []);
+    
+    // Explicitly safe, non-minified loop logic to prevent syntax errors
     const draw = (ctx, project, w, h) => {
         const t = timeRef.current;
-        // Calculate Angle based on speed (v/c)
-        // We exaggerate the effect for visualization: max speed 100 results in ~45 degrees
-        const angle = Math.atan(speed / 100); 
+        const angle = Math.atan(speed / 100);
         
-        // 1. Background (Deep Space)
+        // Background
         const gradient = ctx.createLinearGradient(0, 0, 0, h);
-        gradient.addColorStop(0, '#0f172a');
-        gradient.addColorStop(1, '#1e293b');
+        gradient.addColorStop(0, '#020617');
+        gradient.addColorStop(1, '#0f172a');
         ctx.fillStyle = gradient;
         ctx.fillRect(0,0,w,h);
 
-        // 2. Stars (Gamma Draconis context)
+        // Stars
         ctx.fillStyle = '#ffffff';
         for(let i=0; i<30; i++) {
             const sx = (i*67) % w;
@@ -630,257 +469,93 @@ const RelativitySolver = () => {
         }
         ctx.globalAlpha = 1.0;
 
-        // 3. Highlight Gamma Draconis (The Target)
+        // Target Star
         const starX = w/2; const starY = 40;
-        ctx.shadowBlur = 15; ctx.shadowColor = '#fbbf24';
+        ctx.shadowBlur = 20; ctx.shadowColor = '#fbbf24';
         ctx.fillStyle = '#fbbf24';
         ctx.beginPath(); ctx.arc(starX, starY, 4, 0, 7); ctx.fill();
         ctx.shadowBlur = 0;
 
-        // 4. The "Rain" of Light
-        // Light falls straight down relative to space
-        ctx.strokeStyle = '#94a3b8'; 
+        // Rain
+        ctx.strokeStyle = '#94a3b8';
         ctx.lineWidth = 1.5;
-        const dropSpeed = 5; 
-        
-        // To simulate the "Runner's perspective" in the frame, 
-        // if the runner moves Right, the rain appears to move Left.
-        // But here we draw the "Absolute Frame" (Rain straight) and the "Telescope" tilted.
-        
+        const dropSpeed = 5;
         const cx = w/2; const runnerY = h - 60;
 
-        // Draw Raindrops
         for(let x = -250; x < 250; x+=25) {
-            const dropOffset = (t * dropSpeed + x * 33) % h; // looping Y
-            const rx = cx + x; 
+            const dropOffset = (t * dropSpeed + x * 33) % h;
+            const rx = cx + x;
             
-            // Draw straight rain (Absolute Reality)
-            ctx.beginPath(); 
-            ctx.strokeStyle = 'rgba(148, 163, 184, 0.3)'; // Faint straight lines
-            ctx.moveTo(rx, dropOffset); 
-            ctx.lineTo(rx, dropOffset + 25); 
+            // Real Path
+            ctx.beginPath();
+            ctx.strokeStyle = 'rgba(148, 163, 184, 0.15)';
+            ctx.moveTo(rx, dropOffset);
+            ctx.lineTo(rx, dropOffset + 25);
             ctx.stroke();
 
-            // Draw "Apparent" rain (Relative to Runner) if speed > 0
-            // This visualizes what the runner "sees" (slanted rain)
+            // Apparent Path (Visual)
             if(speed > 5) {
                 const slantX = Math.tan(angle) * 25;
                 ctx.beginPath();
-                ctx.strokeStyle = 'rgba(250, 204, 21, 0.6)'; // Yellowish slanted light
+                ctx.strokeStyle = 'rgba(250, 204, 21, 0.6)';
                 ctx.moveTo(rx, dropOffset);
                 ctx.lineTo(rx - slantX, dropOffset + 25);
                 ctx.stroke();
             }
         }
 
-        // 5. The Runner (Earth)
-        // We keep Earth centered, but the "Universe" moves past it conceptually, 
-        // or we just show the tilt.
-        
-        // Draw The Telescope (Umbrella)
+        // Telescope
         const len = 50;
-        const ex = cx + Math.sin(angle) * len; // Tilted tip
+        const ex = cx + Math.sin(angle) * len;
         const ey = runnerY - Math.cos(angle) * len;
-
-        // Scope Body
-        ctx.strokeStyle = '#38bdf8'; // Cyan telescope
+        
+        ctx.strokeStyle = '#38bdf8';
         ctx.lineWidth = 4;
         ctx.lineCap = 'round';
+        ctx.shadowBlur = 10; ctx.shadowColor = '#38bdf8';
+        
         ctx.beginPath(); ctx.moveTo(cx, runnerY); ctx.lineTo(ex, ey); ctx.stroke();
-
-        // Eye Piece
+        ctx.shadowBlur = 0;
+        
         ctx.fillStyle = '#38bdf8';
         ctx.beginPath(); ctx.arc(cx, runnerY, 6, 0, 7); ctx.fill();
 
-        // 6. Data Overlay on Canvas
+        // Stats
         ctx.fillStyle = '#fff';
-        ctx.font = 'bold 12px monospace';
+        ctx.font = 'bold 12px Rajdhani, monospace';
         ctx.textAlign = 'left';
-        ctx.fillText(`v (Speed): ${speed} km/s`, 20, h-30);
-        ctx.fillText(`θ (Tilt): ${(angle * 180/Math.PI).toFixed(1)}°`, 20, h-15);
+        ctx.fillText(`v: ${speed} km/s`, 20, h-30);
+        ctx.fillText(`θ: ${(angle * 180/Math.PI).toFixed(1)}°`, 20, h-15);
     };
 
     return ( 
         <div className={`flex flex-col h-[calc(100dvh-60px)] -m-4 relative ${fullScreen ? 'fixed inset-0 z-50 m-0 bg-slate-950' : ''}`}> 
-            
-            {/* TOP PANEL: SIMULATION CANVAS */}
             <div className={`relative transition-all duration-500 bg-slate-900 overflow-hidden shadow-xl z-20 ${fullScreen ? 'absolute inset-0 h-full' : 'h-[40%] shrink-0'}`}> 
                 <SimCanvas draw={draw} initZoom={25} /> 
-                
-                {/* Overlay Controls */}
                 <div className="absolute top-4 right-4 flex items-center gap-3"> 
-                    <button onClick={() => setFullScreen(!fullScreen)} className="p-2 rounded-full bg-slate-800/80 text-slate-400 hover:text-white backdrop-blur">⛶</button> 
+                    <button onClick={() => setFullScreen(!fullScreen)} className="p-2 rounded-full bg-slate-800/80 text-slate-400 hover:text-white backdrop-blur border border-white/10">⛶</button> 
                 </div> 
-                
                 <div className="absolute bottom-4 right-4 text-[10px] font-mono text-slate-400 text-right"> 
-                    <div className="flex items-center gap-2 justify-end">
-                        <span className="w-2 h-2 rounded-full bg-slate-500"></span> सत्य (Straight Rain)
-                    </div>
-                    <div className="flex items-center gap-2 justify-end">
-                        <span className="w-2 h-2 rounded-full bg-yellow-400"></span> आभास (Apparent Path)
-                    </div>
+                    <div className="flex items-center gap-2 justify-end"><span className="w-2 h-2 rounded-full bg-slate-600"></span> सत्य (Straight)</div>
+                    <div className="flex items-center gap-2 justify-end"><span className="w-2 h-2 rounded-full bg-yellow-400 shadow shadow-yellow-500/50"></span> आभास (Apparent)</div>
                 </div> 
             </div> 
-
-            {/* BOTTOM PANEL: STORY & CONTROLS */}
             {!fullScreen && ( 
-                <div className="flex-1 flex flex-col bg-slate-950 overflow-hidden border-t border-slate-800"> 
-                    
-                    {/* TABS */}
-                    <div className="flex border-b border-slate-800 shrink-0 bg-slate-900"> 
-                        <button onClick={() => setTab('story')} className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-widest transition ${tab === 'story' ? 'text-yellow-400 border-b-2 border-yellow-500 bg-slate-800' : 'text-slate-500'}`}>The Story</button>
-                        <button onClick={() => setTab('data')} className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-widest transition ${tab === 'data' ? 'text-cyan-400 border-b-2 border-cyan-500 bg-slate-800' : 'text-slate-500'}`}>Data & Facts</button>
+                <div className="flex-1 flex flex-col glass-panel overflow-hidden border-t-0"> 
+                    <div className="flex border-b border-white/10 shrink-0 bg-slate-900/50"> 
+                        <button onClick={() => setTab('story')} className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-widest transition font-display ${tab === 'story' ? 'text-yellow-400 border-b-2 border-yellow-500 bg-white/5' : 'text-slate-500'}`}>The Story</button>
+                        <button onClick={() => setTab('data')} className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-widest transition font-display ${tab === 'data' ? 'text-cyan-400 border-b-2 border-cyan-500 bg-white/5' : 'text-slate-500'}`}>Data & Facts</button>
                     </div> 
-
-                    {/* SCROLLABLE CONTENT */}
                     <div className="flex-1 overflow-y-auto scroller relative"> 
-                        
                         {tab === 'story' && ( 
                             <div className="p-6 space-y-8 pb-20">
-                                
-                                {/* CHAPTER 1 */}
-                                <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
-                                    <h3 className="text-yellow-500 font-bold text-xs uppercase tracking-widest mb-2">1669: द बिगिनिंग</h3>
-                                    <h1 className="text-2xl font-bold text-white mb-4">गामा ड्रैकोनिस: एक खोज</h1>
-                                    <p className="text-slate-300 text-sm leading-7">
-                                        यह कथा ड्रैगन के सिर पर स्थित एक तारे, <strong>'गामा ड्रैकोनिस'</strong> की है, और उससे भी अधिक यह कथा मनुष्य की उस दृष्टि की है जो सत्य को खोजना चाहती है।
-                                    </p>
-                                    <p className="text-slate-300 text-sm leading-7 mt-4">
-                                        वर्ष 1669 में <strong>रॉबर्ट हुक</strong> ने अपनी दूरबीन इस तारे पर साधी। वह कोपरनिकस के सिद्धांत—कि पृथ्वी सूर्य का चक्कर लगाती है—का प्रमाण खोज रहा था। उसे तारे की स्थिति में एक बड़ा बदलाव दिखा। हुक ने उसे <span className="text-cyan-400 font-bold">'पॅरलॅक्स' (Parallax/दृष्टि-भेद)</span> मान लिया।
-                                    </p>
-                                </div>
-
-                                {/* CHAPTER 2 */}
-                                <div className="border-l-2 border-slate-700 pl-4 py-2 my-6">
-                                    <h4 className="text-white font-bold text-lg mb-2">पॅरलॅक्स: दूरी का भ्रम</h4>
-                                    <p className="text-slate-400 text-xs italic mb-3">
-                                        "पॅरलॅक्स दूरी का खेल है।"
-                                    </p>
-                                    <p className="text-slate-300 text-sm leading-6">
-                                        जैसे ट्रेन में चलते हुए पास के पेड़ तेज़ी से पीछे भागते दिखते हैं, लेकिन दूर का पहाड़ स्थिर या बहुत धीमा लगता है। वैसे ही पृथ्वी के घूमने पर पास के तारे की जगह बदलनी चाहिए।
-                                    </p>
-                                    <div className="mt-4 bg-slate-900 p-3 rounded text-xs text-slate-400">
-                                        <strong>अंतर्दृष्टि:</strong> हम सब अपने-अपने 'पॅरलॅक्स' से दुनिया को देख रहे हैं और सोच रहे हैं कि हम सत्य देख रहे हैं। हम सत्य नहीं, केवल एक सापेक्ष कोण देख रहे हैं।
-                                    </div>
-                                </div>
-
-                                {/* CHAPTER 3 */}
-                                <div>
-                                    <h3 className="text-cyan-500 font-bold text-xs uppercase tracking-widest mb-2">1725: द टर्निंग पॉइंट</h3>
-                                    <h1 className="text-xl font-bold text-white mb-3">ब्रैडली और "पथ-भ्रम"</h1>
-                                    <p className="text-slate-300 text-sm leading-7">
-                                        करीब साठ साल बाद, 1725 में, <strong>ब्रैडली</strong> आया। उसने भी तारे की स्थिति में बदलाव देखा।
-                                    </p>
-                                    <p className="text-slate-300 text-sm leading-7 mt-3">
-                                        पर उसने पाया कि तारे का यह झुकाव तब सबसे ज्यादा नहीं था जब पृथ्वी तारे के 'बगल' से गुज़र रही थी। नहीं! यह झुकाव तो तब सबसे ज्यादा था जब पृथ्वी सीधा तारे की 'ओर' जा रही थी या उससे 'दूर' जा रही थी!
-                                    </p>
-                                    <p className="text-yellow-400 text-sm font-bold mt-2">
-                                        यह पॅरलॅक्स (दूरी का प्रभाव) नहीं हो सकता था।
-                                    </p>
-                                </div>
-
-                                {/* INTERACTIVE SIMULATION CHAPTER */}
-                                <div className="bg-slate-900 border border-slate-700 rounded-xl p-4 shadow-lg my-6">
-                                    <div className="flex items-center gap-2 mb-3">
-                                        <span className="bg-yellow-500 text-black text-[10px] font-bold px-2 py-0.5 rounded">प्रयोग (Simulation)</span>
-                                        <h4 className="text-white font-bold text-sm">वर्षा और गति</h4>
-                                    </div>
-                                    <p className="text-slate-300 text-xs leading-5 mb-4">
-                                        मान लीजिए बारिश सीधी नीचे गिर रही है। यदि आप खड़े हैं, तो छाता सीधा रखेंगे। <strong>लेकिन यदि आप दौड़ने लगें?</strong>
-                                    </p>
-                                    
-                                    {/* SLIDER CONTROL */}
-                                    <div className="space-y-2 mb-4">
-                                        <div className="flex justify-between text-xs text-cyan-400 font-bold">
-                                            <span>खड़े हैं (v=0)</span>
-                                            <span>दौड़ रहे हैं (v=100)</span>
-                                        </div>
-                                        <input 
-                                            type="range" 
-                                            min="0" max="100" 
-                                            value={speed} 
-                                            onChange={(e) => setSpeed(parseFloat(e.target.value))}
-                                            className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-cyan-500"
-                                        />
-                                        <div className="text-center text-xs text-slate-500 mt-1">
-                                            पृथ्वी की गति: <span className="text-white font-mono">{speed} km/s</span>
-                                        </div>
-                                    </div>
-
-                                    <p className="text-slate-300 text-xs leading-5">
-                                        ऊपर कैनवास में देखें। बारिश (प्रकाश) की दिशा नहीं बदली, तुम्हारी गति के कारण तुम्हें उसका पथ बदला हुआ दिख रहा है। 
-                                        <br/><br/>
-                                        <span className="text-white">यही है एबरेशन (Aberration)।</span>
-                                    </p>
-                                </div>
-
-                                {/* CONCLUSION */}
-                                <div>
-                                    <h1 className="text-xl font-bold text-white mb-3">8 मिनट और 12 सेकंड</h1>
-                                    <p className="text-slate-300 text-sm leading-7">
-                                        ब्रैडली ने पृथ्वी की गति (v) और प्रकाश के इस झुकाव (c) के कोण को मापा और एक क्रांतिकारी गणना की। उसने दुनिया को बताया कि सूर्य की किरण को हम तक पहुँचने में 8 मिनट और 12 सेकंड लगते हैं।
-                                    </p>
-                                    <div className="mt-4 border-l-4 border-cyan-500 pl-4 py-1">
-                                        <p className="text-slate-200 text-sm italic font-serif">
-                                            "विकृति तारे में नहीं है, विकृति देखने वाले की अपनी गति में है।"
-                                        </p>
-                                    </div>
-                                    <p className="text-slate-400 text-xs mt-4">
-                                        The distortion is in the observer.
-                                    </p>
-                                </div>
-
+                                <div className="animate-in fade-in slide-in-from-bottom-4 duration-700"> <h3 className="text-yellow-500 font-bold text-xs uppercase tracking-widest mb-2 font-display">1669: ORIGIN</h3> <h1 className="text-2xl font-bold text-white mb-4 font-display">Gamma Draconis</h1> <p className="text-slate-300 text-sm leading-7"> This is the story of <strong>'Gamma Draconis'</strong>, a star in the Dragon's head, and humanity's quest to measure the universe. </p> <p className="text-slate-300 text-sm leading-7 mt-4"> In 1669, <strong>Robert Hooke</strong> aimed his telescope. He sought parallax—proof of Earth's orbit. He saw a shift, but it was <span className="text-cyan-400 font-bold glow">Aberration</span>, not Parallax. </p> </div>
+                                <div className="border-l-2 border-cyan-500/30 pl-4 py-2 my-6"> <h4 className="text-white font-bold text-lg mb-2 font-display">The Illusion of Distance</h4> <p className="text-slate-400 text-xs italic mb-3">"Parallax is a game of position."</p> <p className="text-slate-300 text-sm leading-6"> Just as nearby trees rush by while mountains stand still, parallax relies on distance. But the shift Bradley saw wasn't about distance. </p> </div>
+                                <div className="glass-card p-4 rounded-xl border border-white/10 shadow-lg my-6"> <div className="flex items-center gap-2 mb-3"> <span className="bg-yellow-500 text-black text-[10px] font-bold px-2 py-0.5 rounded font-display">SIMULATION</span> <h4 className="text-white font-bold text-sm font-display">Rain & Motion</h4> </div> <p className="text-slate-300 text-xs leading-5 mb-4"> If you run through rain, you tilt your umbrella forward. The faster you run, the more you tilt. </p> <div className="space-y-2 mb-4"> <div className="flex justify-between text-xs text-cyan-400 font-bold font-display"> <span>Static (v=0)</span> <span>Light Speed (v=c)</span> </div> <input type="range" min="0" max="100" value={speed} onChange={(e) => setSpeed(parseFloat(e.target.value))} className="w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-cyan-500" /> <div className="text-center text-xs text-slate-500 mt-1">Velocity: <span className="text-cyan-400 font-mono">{speed} km/s</span></div> </div> <p className="text-slate-300 text-xs leading-5"><span className="text-white">Aberration</span> is the tilt of the telescope required to catch the light from a moving Earth.</p> </div>
+                                <div> <h1 className="text-xl font-bold text-white mb-3 font-display">8m 12s</h1> <p className="text-slate-300 text-sm leading-7">Bradley used this tilt to calculate the speed of light, proving it takes 8 minutes and 12 seconds to reach Earth.</p> </div>
                             </div> 
                         )} 
-
-                        {tab === 'data' && ( 
-                            <div className="p-4 space-y-4">
-                                <div className="bg-slate-900 p-4 rounded-xl border border-slate-800">
-                                    <h3 className="text-xs font-bold text-slate-500 uppercase mb-3">तुलना (Comparison)</h3>
-                                    <table className="w-full text-left border-collapse">
-                                        <thead>
-                                            <tr className="text-[10px] text-slate-400 border-b border-slate-700">
-                                                <th className="py-2">विशेषता</th>
-                                                <th className="py-2 text-cyan-400">पॅरलॅक्स</th>
-                                                <th className="py-2 text-yellow-400">एबरेशन</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="text-xs text-slate-300">
-                                            <tr className="border-b border-slate-800">
-                                                <td className="py-3 font-bold text-slate-500">कारण</td>
-                                                <td className="py-3">पृथ्वी की स्थिति</td>
-                                                <td className="py-3">पृथ्वी की गति</td>
-                                            </tr>
-                                            <tr className="border-b border-slate-800">
-                                                <td className="py-3 font-bold text-slate-500">निर्भरता</td>
-                                                <td className="py-3">दूरी पर निर्भर</td>
-                                                <td className="py-3">प्रकाश की गति (c)</td>
-                                            </tr>
-                                            <tr>
-                                                <td className="py-3 font-bold text-slate-500">खोज</td>
-                                                <td className="py-3">हुक का भ्रम</td>
-                                                <td className="py-3">ब्रैडली का सत्य</td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
-                                </div>
-
-                                <div className="bg-slate-900 p-4 rounded-xl border border-slate-800">
-                                    <h3 className="text-xs font-bold text-slate-500 uppercase mb-3">Live Data</h3>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <div className="text-[10px] text-slate-500">Current Velocity</div>
-                                            <div className="text-lg font-mono text-cyan-400">{speed} <span className="text-xs">unit</span></div>
-                                        </div>
-                                        <div>
-                                            <div className="text-[10px] text-slate-500">Tilt Angle (θ)</div>
-                                            <div className="text-lg font-mono text-yellow-400">{(Math.atan(speed/100)*180/Math.PI).toFixed(2)}°</div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div> 
-                        )}
-
+                        {tab === 'data' && ( <div className="p-4 space-y-4"> <div className="glass-card p-4 rounded-xl"> <h3 className="text-xs font-bold text-slate-500 uppercase mb-3 font-display">Comparison</h3> <table className="w-full text-left border-collapse"> <thead><tr className="text-[10px] text-slate-400 border-b border-slate-700"><th className="py-2">Factor</th><th className="py-2 text-cyan-400">Parallax</th><th className="py-2 text-yellow-400">Aberration</th></tr></thead> <tbody className="text-xs text-slate-300"> <tr className="border-b border-slate-800"><td className="py-3 font-bold text-slate-500">Cause</td><td className="py-3">Position</td><td className="py-3">Velocity</td></tr> <tr className="border-b border-slate-800"><td className="py-3 font-bold text-slate-500">Dependence</td><td className="py-3">Distance</td><td className="py-3">Speed (c)</td></tr> </tbody> </table> </div> <div className="glass-card p-4 rounded-xl border border-white/10"> <h3 className="text-xs font-bold text-slate-500 uppercase mb-3 font-display">Live Telemetry</h3> <div className="grid grid-cols-2 gap-4"> <div><div className="text-[10px] text-slate-500">Velocity</div><div className="text-lg font-mono text-cyan-400">{speed} <span className="text-xs">km/s</span></div></div> <div><div className="text-[10px] text-slate-500">Angle (θ)</div><div className="text-lg font-mono text-yellow-400">{(Math.atan(speed/100)*180/Math.PI).toFixed(2)}°</div></div> </div> </div> </div> )}
                     </div> 
                 </div> 
             )} 
@@ -888,122 +563,116 @@ const RelativitySolver = () => {
     );
 };
 
-// --- SIM CANVAS (FALLBACK) ---
+// --- SIMULATION FALLBACK ---
 const SimCanvasFallback = ({ type }) => {
     const canvasRef = useRef(null);
     useEffect(() => {
-        const canvas = canvasRef.current; const ctx = canvas.getContext('2d'); let t = 0; let id;
-        const render = () => { t++; const w = canvas.width = canvas.parentElement.clientWidth; const h = canvas.height = 240; ctx.fillStyle = '#1e293b'; ctx.fillRect(0,0,w,h); const cx = w/2, cy = h/2;
-            if(type === 'pendulum') { ctx.fillStyle = '#f8fafc'; ctx.fillRect(0,0,w,h); const ang = Math.sin(t*0.05) * Math.PI/4; const bx = cx + 120*Math.sin(ang); const by = 20 + 120*Math.cos(ang); ctx.beginPath(); ctx.moveTo(cx,20); ctx.lineTo(bx,by); ctx.strokeStyle='#475569'; ctx.stroke(); ctx.beginPath(); ctx.arc(bx, by, 12, 0, 7); ctx.fillStyle='#e11d48'; ctx.fill(); }
+        const canvas = canvasRef.current; 
+        if(!canvas) return;
+        const ctx = canvas.getContext('2d'); 
+        let t = 0; let id;
+        const render = () => { 
+            t++; const w = canvas.width = canvas.parentElement.clientWidth; const h = canvas.height = 240; 
+            const grad = ctx.createLinearGradient(0,0,0,h); grad.addColorStop(0, '#020617'); grad.addColorStop(1, '#0f172a'); ctx.fillStyle = grad; ctx.fillRect(0,0,w,h); 
+            const cx = w/2, cy = h/2;
+            if(type === 'pendulum') { ctx.strokeStyle='#475569'; ctx.beginPath(); ctx.moveTo(cx,20); const ang = Math.sin(t*0.05) * Math.PI/4; const bx = cx + 120*Math.sin(ang); const by = 20 + 120*Math.cos(ang); ctx.lineTo(bx,by); ctx.stroke(); ctx.beginPath(); ctx.arc(bx, by, 12, 0, 7); ctx.fillStyle='#e11d48'; ctx.fill(); }
             id = requestAnimationFrame(render);
-        }; render(); return () => cancelAnimationFrame(id);
+        }; 
+        render(); 
+        return () => cancelAnimationFrame(id);
     }, [type]);
-    return <div className="rounded-xl overflow-hidden mt-4 shadow-inner"><canvas ref={canvasRef} className="block w-full h-[240px]"/></div>;
+    return <div className="rounded-xl overflow-hidden mt-4 shadow-inner border border-white/10"><canvas ref={canvasRef} className="block w-full h-[240px]"/></div>;
 };
 
+// --- MAIN APP ---
 const App = () => {
-    const [view, setView] = useState('home'); const [sim, setSim] = useState(null); const [menu, setMenu] = useState(false);
+    const [view, setView] = useState('home'); 
+    const [sim, setSim] = useState(null); 
+    const [menu, setMenu] = useState(false);
+
+    // Hide loader when React mounts
+    useEffect(() => {
+        const loader = document.getElementById('loader');
+        if (loader) {
+            loader.style.opacity = '0';
+            setTimeout(() => loader.remove(), 500);
+        }
+    }, []);
+
     return (
-        <div className="flex flex-col h-full bg-slate-50">
-            <header className="bg-white border-b border-slate-200 px-4 py-3 flex justify-between items-center shrink-0 sticky top-0 z-20">
-                <div className="flex items-center gap-2" onClick={() => setView('home')}>
-                    <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold">K</div>
-                    <span className="font-bold text-slate-800">Kala-SimuX</span>
+        <div className="flex flex-col h-full bg-transparent text-slate-200 font-sans">
+            {/* HEADER */}
+            <header className="glass-panel border-b border-white/5 px-4 py-4 flex justify-between items-center shrink-0 sticky top-0 z-30">
+                <div className="flex items-center gap-3 cursor-pointer" onClick={() => setView('home')}>
+                    <div className="w-8 h-8 rounded bg-gradient-to-br from-blue-600 to-cyan-500 text-white flex items-center justify-center font-bold shadow-[0_0_15px_rgba(37,99,235,0.5)]">K</div>
+                    <span className="font-bold text-white tracking-widest font-display text-lg">KALA-SIMUX</span>
                 </div>
-                <button onClick={() => setMenu(true)} className="p-2"><Icons.Menu /></button>
+                <button onClick={() => setMenu(true)} className="p-2 text-cyan-400 hover:text-white transition hover:drop-shadow-[0_0_5px_cyan]"><Icons.Menu /></button>
             </header>
-            <div className={`fixed inset-0 z-50 bg-black/50 transition-opacity ${menu ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={() => setMenu(false)}>
-                <div className={`absolute right-0 top-0 bottom-0 w-72 bg-white shadow-2xl p-6 transition-transform duration-300 ${menu ? 'translate-x-0' : 'translate-x-full'}`} onClick={e => e.stopPropagation()}>
-                    <div className="flex justify-between items-center mb-8"><h2 className="font-bold text-xl">Profile</h2><button onClick={() => setMenu(false)}><Icons.Close /></button></div>
-                    <div className="text-center mb-6"><div className="w-20 h-20 bg-blue-100 text-blue-600 rounded-full mx-auto flex items-center justify-center mb-3"><Icons.User /></div><h3 className="font-bold text-lg text-slate-800">{PROFILE.name}</h3><p className="text-sm text-slate-500">{PROFILE.role}</p></div>
-                    <div className="space-y-3 text-sm text-slate-600">{PROFILE.details.map((d, i) => <div key={i} className="pl-3 border-l-2 border-blue-500">{d}</div>)}</div>
+
+            {/* SIDE MENU */}
+            <div className={`fixed inset-0 z-50 bg-black/80 backdrop-blur-sm transition-opacity ${menu ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={() => setMenu(false)}>
+                <div className={`absolute right-0 top-0 bottom-0 w-72 glass-panel border-l border-white/10 shadow-2xl p-6 transition-transform duration-300 ${menu ? 'translate-x-0' : 'translate-x-full'}`} onClick={e => e.stopPropagation()}>
+                    <div className="flex justify-between items-center mb-8"><h2 className="font-bold text-xl font-display text-cyan-400">ACCESS</h2><button onClick={() => setMenu(false)} className="text-slate-400 hover:text-white"><Icons.Close /></button></div>
+                    <div className="text-center mb-6"> <div className="w-20 h-20 bg-slate-800 border border-cyan-500/50 text-cyan-400 rounded-full mx-auto flex items-center justify-center mb-3 shadow-[0_0_20px_rgba(6,182,212,0.2)]"><Icons.User /></div> <h3 className="font-bold text-lg text-white font-display">{PROFILE.name}</h3> <p className="text-sm text-cyan-500/80">{PROFILE.role}</p> </div>
+                    <div className="space-y-3 text-sm text-slate-400 font-mono">{PROFILE.details.map((d, i) => <div key={i} className="pl-3 border-l-2 border-cyan-800">{d}</div>)}</div>
                 </div>
             </div>
-            <main className="flex-1 overflow-y-auto no-scrollbar p-4 pb-24">
+
+            {/* MAIN CONTENT */}
+            <main className="flex-1 overflow-y-auto scroller p-4 pb-28 relative z-10">
                 {view === 'home' && (
-                    <div className="space-y-6">
-                        
-                        {/* HEADER: KALA-SIMUX */}
-                        <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 mb-6 flex justify-center">
-                            <img 
-                                src="Kala-SimuX.png" 
-                                alt="Kala-SimuX" 
-                                className="w-full max-w-[280px] object-contain" 
-                                onError={(e) => {
-                                    e.target.style.display = 'none';
-                                    e.target.parentElement.innerHTML = '<div class="text-center p-4"><h1 class="text-2xl font-bold text-slate-900">Kala-SimuX</h1><p class="text-xs text-slate-500 mt-2">From Motion We Measure Time;<br>With Time We Simulate Motion</p></div>';
-                                }}
-                            />
+                    <div className="space-y-8 animate-in fade-in duration-500">
+                        <div className="relative p-6 rounded-2xl glass-card overflow-hidden border border-white/10 group">
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/20 blur-[50px] rounded-full -mr-10 -mt-10"></div>
+                            <div className="relative z-10 text-center"> <h1 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500 font-display mb-2 drop-shadow-[0_0_10px_rgba(6,182,212,0.3)]">KALA-SIMUX</h1> <p className="text-xs text-cyan-200/70 font-mono tracking-wider">FROM MOTION WE MEASURE TIME<br/>WITH TIME WE SIMULATE MOTION</p> </div>
                         </div>
-
-                        <div><h3 className="font-bold text-slate-800 mb-3 text-sm uppercase tracking-wide">Experiments</h3><div className="space-y-3">{SIMS.map(s => (<button key={s.id} onClick={() => { setSim(s.id); setView('sim'); }} className="w-full bg-white p-4 rounded-xl border border-slate-100 shadow-sm flex items-center gap-4 text-left"><div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${s.color}`}><Icons.Atom /></div><div><div className="font-bold text-slate-900">{s.title}</div><div className="text-xs text-slate-500">{s.desc}</div></div></button>))}</div></div>
+                        <div>
+                            <h3 className="font-bold text-slate-500 mb-4 text-xs uppercase tracking-[0.2em] font-display pl-2">Simulation Modules</h3>
+                            <div className="grid gap-3"> {SIMS.map(s => ( <button key={s.id} onClick={() => { setSim(s.id); setView('sim'); }} className="group glass-card p-4 rounded-xl flex items-center gap-4 text-left hover:border-cyan-500/50 hover:shadow-[0_0_15px_rgba(6,182,212,0.15)] relative overflow-hidden"> <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/10 to-transparent opacity-0 group-hover:opacity-100 transition duration-500"></div> <div className={`w-12 h-12 rounded-lg flex items-center justify-center shrink-0 ${s.iconBg} ${s.color} border border-white/5`}> <Icons.Atom /> </div> <div className="relative z-10"> <div className="font-bold text-slate-100 font-display text-sm group-hover:text-cyan-300 transition">{s.title}</div> <div className="text-[10px] text-slate-400 font-mono">{s.desc}</div> </div> <div className="ml-auto text-slate-600 group-hover:text-cyan-400 transition transform group-hover:translate-x-1">→</div> </button> ))} </div>
+                        </div>
                     </div>
                 )}
+                
                 {view === 'sim' && (
-                    <div className="animate-in slide-in-from-bottom duration-300">
-                        <button onClick={() => setView('home')} className="flex items-center gap-2 text-slate-500 mb-4 font-bold text-sm"><Icons.Back /> Back</button>
-                        <h2 className="text-2xl font-bold text-slate-900 mb-2">{SIMS.find(s=>s.id===sim)?.title}</h2>
-                        {sim === 'orbit' ? <ODESolver /> : sim === 'em' ? <EMSolver /> : sim === 'thermo' ? <ThermoSolver /> : sim === 'wave' ? <WaveSolver /> : sim === 'relativity' ? <RelativitySolver /> : <SimCanvasFallback type={sim} />}
-                        {sim !== 'orbit' && sim !== 'em' && sim !== 'thermo' && sim !== 'wave' && sim !== 'relativity' && <div className="mt-4 p-4 bg-blue-50 border border-blue-100 rounded-xl text-sm text-blue-900"><strong>Note:</strong> Visualize the change. This simulation runs in real-time.</div>}
+                    <div className="animate-in slide-in-from-bottom duration-500">
+                        <button onClick={() => setView('home')} className="flex items-center gap-2 text-cyan-500 mb-4 font-bold text-xs uppercase tracking-widest hover:text-cyan-300 transition"><Icons.Back /> Return to Hub</button>
+                        <h2 className="text-xl font-bold text-white mb-2 font-display uppercase tracking-wider">{SIMS.find(s=>s.id===sim)?.title}</h2>
+                        <div className="rounded-xl overflow-hidden border border-white/10 shadow-2xl shadow-black/50 bg-black/40"> 
+                            {sim === 'orbit' ? <ODESolver /> : sim === 'em' ? <EMSolver /> : sim === 'thermo' ? <ThermoSolver /> : sim === 'wave' ? <WaveSolver /> : sim === 'relativity' ? <RelativitySolver /> : <SimCanvasFallback type={sim} />} 
+                        </div>
+                        {sim !== 'orbit' && sim !== 'em' && sim !== 'thermo' && sim !== 'wave' && sim !== 'relativity' && <div className="mt-4 p-4 bg-cyan-900/20 border border-cyan-500/30 rounded-xl text-xs text-cyan-200 font-mono"><strong>STATUS:</strong> Real-time simulation active. Adjust parameters carefully.</div>}
                     </div>
                 )}
+                
                 {view === 'books' && (
-                    <div className="space-y-6">
-                        {/* BOOKS SECTION */}
+                    <div className="space-y-8 animate-in fade-in duration-500">
                         <div className="space-y-4">
-                            <h2 className="font-bold text-xl text-slate-800">Study Material</h2>
-                            {BOOKS.map(b => (
-                                <div key={b.id} className="bg-white rounded-xl p-4 shadow-sm border border-slate-100 flex gap-4">
-                                    <div className={`w-20 h-24 shrink-0 rounded flex items-center justify-center ${b.color}`}>
-                                        <Icons.Book />
-                                    </div>
-                                    <div className="flex-1 flex flex-col">
-                                        <h3 className="font-bold text-slate-900 leading-tight">{b.title}</h3>
-                                        <p className="text-xs text-slate-500 mt-1 mb-2">{b.desc}</p>
-                                        <div className="mt-auto flex gap-2">
-                                            {b.links.map((link, i) => (
-                                                <a key={i} href={link.url} target="_blank" className="flex-1 bg-slate-900 text-white text-[10px] font-bold py-2 px-1 rounded text-center truncate hover:bg-slate-700 transition">
-                                                    {link.label}
-                                                </a>
-                                            ))}
-                                        </div>
-                                    </div>
-                                </div>
-                            ))}
+                            <h2 className="font-bold text-xl text-white font-display border-l-4 border-purple-500 pl-3">Archives & Texts</h2>
+                            {BOOKS.map(b => ( <div key={b.id} className={`glass-card rounded-xl p-4 flex gap-4 border ${b.color} border-opacity-20 hover:border-opacity-60 transition`}> <div className="w-16 h-20 bg-slate-900/50 rounded flex items-center justify-center shrink-0 border border-white/10"> <div className={b.color.split(' ')[0]}><Icons.Book /></div> </div> <div className="flex-1 flex flex-col"> <h3 className="font-bold text-slate-100 font-display text-sm">{b.title}</h3> <p className="text-[10px] text-slate-400 mt-1 mb-3 font-mono">{b.desc}</p> <div className="mt-auto flex gap-2"> {b.links.map((link, i) => ( <a key={i} href={link.url} target="_blank" className="flex-1 bg-white/5 hover:bg-white/10 text-cyan-400 text-[9px] font-bold py-1.5 px-2 rounded border border-white/10 text-center uppercase tracking-wider transition"> {link.label} </a> ))} </div> </div> </div> ))}
                         </div>
-
-                        {/* YOUTUBE SECTION */}
                         <div className="space-y-4">
-                            <h2 className="font-bold text-xl text-slate-800 flex items-center gap-2">
-                                <span className="text-red-500"><Icons.YouTube /></span> Lectures
-                            </h2>
-                            {YOUTUBE_VIDEOS.map(v => (
-                                <a key={v.id} href={v.url} target="_blank" className="block bg-white rounded-xl overflow-hidden shadow-sm border border-slate-100 hover:shadow-md transition group">
-                                    <div className="relative aspect-video bg-slate-200">
-                                        <img src={`https://img.youtube.com/vi/${v.id}/mqdefault.jpg`} alt={v.title} className="w-full h-full object-cover" />
-                                        <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/10 transition">
-                                            <div className="w-10 h-10 bg-red-600 rounded-full flex items-center justify-center text-white shadow-lg">
-                                                <Icons.Play />
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="p-3">
-                                        <h3 className="font-bold text-slate-900 text-sm leading-tight line-clamp-2">{v.title}</h3>
-                                        <div className="mt-2 flex items-center gap-1 text-[10px] text-slate-500 font-bold uppercase tracking-wide">
-                                            <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span> Watch on YouTube
-                                        </div>
-                                    </div>
-                                </a>
-                            ))}
+                            <h2 className="font-bold text-xl text-white font-display border-l-4 border-red-500 pl-3 flex items-center gap-2"> Data Feeds </h2>
+                            {YOUTUBE_VIDEOS.map(v => ( <a key={v.id} href={v.url} target="_blank" className="block glass-card rounded-xl overflow-hidden group border border-white/10 hover:border-red-500/50 transition relative"> <div className="relative aspect-video bg-black"> <img src={`https://img.youtube.com/vi/${v.id}/mqdefault.jpg`} alt={v.title} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition duration-500" /> <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent"></div> <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition duration-300"> <div className="w-12 h-12 bg-red-600/90 rounded-full flex items-center justify-center text-white shadow-[0_0_20px_rgba(220,38,38,0.6)] backdrop-blur"> <Icons.Play /> </div> </div> </div> <div className="p-3"> <h3 className="font-bold text-slate-200 text-xs leading-tight font-display line-clamp-2 group-hover:text-red-400 transition">{v.title}</h3> <div className="mt-2 flex items-center gap-2 text-[9px] text-slate-500 font-bold uppercase tracking-widest font-mono"> <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span> Live Feed </div> </div> </a> ))}
                         </div>
                     </div>
                 )}
             </main>
-            <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 h-16 flex justify-around items-center z-30 max-w-md mx-auto"><button onClick={() => setView('home')} className={`flex flex-col items-center gap-1 p-2 ${view!=='books'?'text-blue-600':'text-slate-400'}`}><Icons.Lab /><span className="text-[10px] font-bold">Labs</span></button><button onClick={() => setView('books')} className={`flex flex-col items-center gap-1 p-2 ${view==='books'?'text-blue-600':'text-slate-400'}`}><Icons.Book /><span className="text-[10px] font-bold">Books</span></button></nav>
+
+            {/* FLOATING DOCK */}
+            <div className="fixed bottom-6 left-0 right-0 flex justify-center z-40 pointer-events-none">
+                <nav className="glass-panel rounded-full px-6 py-2 flex items-center gap-8 pointer-events-auto border border-white/10 shadow-[0_10px_30px_rgba(0,0,0,0.5)]">
+                    <button onClick={() => setView('home')} className={`flex flex-col items-center gap-1 p-2 transition duration-300 ${view!=='books'?'text-cyan-400 scale-110 drop-shadow-[0_0_8px_cyan]':'text-slate-500 hover:text-slate-300'}`}> <Icons.Lab /> <span className="text-[8px] font-bold uppercase tracking-widest font-display">Sims</span> </button>
+                    <div className="w-px h-8 bg-white/10"></div>
+                    <button onClick={() => setView('books')} className={`flex flex-col items-center gap-1 p-2 transition duration-300 ${view==='books'?'text-purple-400 scale-110 drop-shadow-[0_0_8px_purple]':'text-slate-500 hover:text-slate-300'}`}> <Icons.Book /> <span className="text-[8px] font-bold uppercase tracking-widest font-display">Data</span> </button>
+                </nav>
+            </div>
         </div>
     );
 };
-const root = ReactDOM.createRoot(document.getElementById('root')); root.render(<App />);
+
+const root = ReactDOM.createRoot(document.getElementById('root')); 
+root.render(<App />);
 </script>
 </body>
 </html>
