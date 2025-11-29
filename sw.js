@@ -1,5 +1,5 @@
 // --- SERVICE WORKER V6 ---
-const CACHE_NAME = 'physics-app-v6'; // Bumped version to force update
+const CACHE_NAME = 'physics-app-v7'; // Bumped version to force update
 const urlsToCache = [
   './',
   './index.html',
@@ -40,3 +40,4 @@ self.addEventListener('fetch', event => {
       .then(response => response || fetch(event.request))
   );
 });
+
