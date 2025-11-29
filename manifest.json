@@ -1,10 +1,10 @@
 {
   "name": "Abhishek Physics",
-  "short_name": "Physics",
+  "short_name": "Kala-SimuX",
   "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#ffffff",
+  "background_color": "#020617",
+  "theme_color": "#020617",
   "orientation": "portrait",
   "icons": [
     {
