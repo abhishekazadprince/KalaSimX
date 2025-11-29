@@ -1,8 +1,10 @@
-const CACHE_NAME = 'physics-app-v12';
+// --- SERVICE WORKER V6 ---
+const CACHE_NAME = 'physics-app-v6'; // Bumped version to force update
 const urlsToCache = [
   './',
   './index.html',
-  './manifest.json'
+  './manifest.json',
+  './Kala-SimuX.png'
 ];
 
 // Install event - caches the files
@@ -21,6 +23,7 @@ self.addEventListener('activate', event => {
       return Promise.all(
         cacheNames.map(cacheName => {
           if (cacheName !== CACHE_NAME) {
+            console.log('Deleting old cache:', cacheName);
             return caches.delete(cacheName);
           }
         })
@@ -37,10 +40,3 @@ self.addEventListener('fetch', event => {
       .then(response => response || fetch(event.request))
   );
 });
-
-
-
-
-
-
-
