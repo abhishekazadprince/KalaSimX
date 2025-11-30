@@ -1,13 +1,13 @@
-// --- KALA-SIMUX SERVICE WORKER V9 ---
-// Optimized for "Add to Home Screen" Standalone detection
+// --- KALA-SIMUX SERVICE WORKER V10 ---
+// Optimized for Opera/Android Standalone Installation
 
-const CACHE_NAME = 'kala-simux-v9-standalone';
+const CACHE_NAME = 'kala-simux-v10-standalone';
 const URLS_TO_CACHE = [
   './',
   './index.html',
   './manifest.json',
   './Kala-SimuX.png',
-  // Critical Dependencies
+  // Dependencies required for offline boot
   'https://unpkg.com/react@18/umd/react.production.min.js',
   'https://unpkg.com/react-dom@18/umd/react-dom.production.min.js',
   'https://unpkg.com/@babel/standalone/babel.min.js',
@@ -19,20 +19,18 @@ const URLS_TO_CACHE = [
   'https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;500;700&display=swap'
 ];
 
-// 1. INSTALL: Cache everything immediately
 self.addEventListener('install', event => {
-  self.skipWaiting(); // Force activation
+  self.skipWaiting(); // Activate worker immediately
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
-        console.log('SW: Caching Core Files');
+        console.log('SW: Caching Core Files for Offline Support');
         return cache.addAll(URLS_TO_CACHE);
       })
       .catch(err => console.error('SW: Cache Failed', err))
   );
 });
 
-// 2. ACTIVATE: Clean up old caches to prevent "shortcut" mode bugs
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(cacheNames => {
@@ -45,14 +43,14 @@ self.addEventListener('activate', event => {
       );
     })
   );
-  return self.clients.claim(); // Take control immediately
+  return self.clients.claim(); // Take control of all pages immediately
 });
 
-// 3. FETCH: Serve from cache, fall back to network
 self.addEventListener('fetch', event => {
   event.respondWith(
     caches.match(event.request)
       .then(response => {
+        // Return cache if available, otherwise fetch from network
         return response || fetch(event.request);
       })
   );
