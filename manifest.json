@@ -1,21 +1,36 @@
 {
-  "name": "Abhishek Physics",
+  "name": "Kala-SimuX Physics Lab",
   "short_name": "Kala-SimuX",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#020617",
   "theme_color": "#020617",
   "orientation": "portrait",
+  "scope": "./",
   "icons": [
     {
-      "src": "https://img.icons8.com/color/192/atom-editor.png",
+      "src": "./Kala-SimuX.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
     },
     {
-      "src": "https://img.icons8.com/color/512/atom-editor.png",
+      "src": "./Kala-SimuX.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./Kala-SimuX.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "./Kala-SimuX.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }
