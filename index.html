@@ -8,10 +8,10 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="description" content="Advanced Physics Simulation Environment">
     
-    <!-- PWA MANIFEST -->
+    <!-- PWA MANIFEST & ICONS (Critical for Standalone App) -->
     <link rel="manifest" href="manifest.json">
-    <link rel="icon" type="image/png" href="Kala-SimuX.png">
-    <link rel="apple-touch-icon" href="Kala-SimuX.png">
+    <link rel="icon" type="image/png" href="./Kala-SimuX.png">
+    <link rel="apple-touch-icon" href="./Kala-SimuX.png">
     
     <!-- FONTS -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -71,8 +71,8 @@
 
 <div id="loader">
     <div class="w-16 h-16 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin"></div>
-    <div class="text-cyan-500 font-mono text-sm animate-pulse tracking-widest">KALA-SIMUX LOADING</div>
-    <div class="text-slate-500 text-xs font-mono" id="loader-status">System Check...</div>
+    <div class="text-cyan-500 font-mono text-sm animate-pulse tracking-widest">KALA-SIMUX INITIALIZING</div>
+    <div class="text-slate-500 text-xs font-mono" id="loader-status">Loading Core Modules...</div>
 </div>
 
 <div class="star-bg"><div class="grid-overlay"></div></div>
@@ -81,12 +81,10 @@
 <script>
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-            navigator.serviceWorker.register('./sw.js')
-                .then(reg => {
-                    console.log('SW Registered');
-                    document.getElementById('loader-status').innerText = "Ready to Launch";
-                })
-                .catch(err => console.log('SW Fail:', err));
+            navigator.serviceWorker.register('./sw.js').then(reg => {
+                document.getElementById('loader-status').innerText = "System Ready";
+                console.log('SW registered for scope:', reg.scope);
+            }).catch(err => console.log('SW Fail:', err));
         });
     }
 </script>
