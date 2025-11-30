@@ -1,6 +1,7 @@
 {
   "name": "Kala-SimuX Physics Lab",
   "short_name": "Kala-SimuX",
+  "id": "/kala-simux-lab",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#020617",
