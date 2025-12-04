@@ -1,13 +1,7 @@
-// --- KALA-SIMUX SERVICE WORKER V11 ---
-// Optimized for Standalone Installation on all browsers (Chrome, Opera, etc.)
+const CACHE_NAME = 'kala-simux-v24-ultimate';
 
-const CACHE_NAME = 'kala-simux-v11-standalone';
-const URLS_TO_CACHE = [
-  './',
-  './index.html',
-  './manifest.json',
-  './Kala-SimuX.png', // Ensure this file exists and has NO spaces in name
-  // External Dependencies required for offline functionality
+// We explicitly cache the CDNs so the app works even without internet later
+const EXTERNAL_ASSETS = [
   'https://unpkg.com/react@18/umd/react.production.min.js',
   'https://unpkg.com/react-dom@18/umd/react-dom.production.min.js',
   'https://unpkg.com/@babel/standalone/babel.min.js',
@@ -16,50 +10,67 @@ const URLS_TO_CACHE = [
   'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js',
-  'https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;500;700&display=swap'
+  'https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;500;700&family=Crimson+Text:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;700&family=Noto+Sans+Devanagari:wght@400;700&display=swap'
 ];
 
-// 1. INSTALL EVENT
-// Forces the SW to wait until all critical files are cached.
-// If any file in URLS_TO_CACHE fails (e.g., image not found), installation fails.
-self.addEventListener('install', event => {
-  self.skipWaiting(); // Activate worker immediately
-  event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => {
-        console.log('SW: Caching Core Files for Offline Support');
-        return cache.addAll(URLS_TO_CACHE);
-      })
-      .catch(err => console.error('SW: Critical Cache Failure', err))
-  );
-});
+// Local files to cache
+const APP_SHELL = [
+  './',
+  './index.html', // IMPORTANT: Your main HTML file MUST be named index.html
+  './manifest.json',
+  './Kala-SimuX.png'
+];
 
-// 2. ACTIVATE EVENT
-// Cleans up old caches to ensure the new icon/manifest logic takes over.
-self.addEventListener('activate', event => {
+// 1. Install Phase
+self.addEventListener('install', event => {
+  self.skipWaiting();
   event.waitUntil(
-    caches.keys().then(cacheNames => {
-      return Promise.all(
-        cacheNames.map(cacheName => {
-          if (cacheName !== CACHE_NAME) {
-            console.log('SW: Deleting old cache', cacheName);
-            return caches.delete(cacheName);
-          }
-        })
-      );
+    caches.open(CACHE_NAME).then(cache => {
+      // We try to cache everything, but we don't fail if one local file is missing (except the start url)
+      return cache.addAll([...EXTERNAL_ASSETS, ...APP_SHELL]).catch(err => {
+        console.warn('Some assets failed to cache, but app will still install:', err);
+      });
     })
   );
-  return self.clients.claim(); // Take control of all pages immediately
 });
 
-// 3. FETCH EVENT
-// Serves cached content when offline.
-self.addEventListener('fetch', event => {
-  event.respondWith(
-    caches.match(event.request)
-      .then(response => {
-        // Return cache if available, otherwise fetch from network
-        return response || fetch(event.request);
+// 2. Activate Phase (Cleanup)
+self.addEventListener('activate', event => {
+  event.waitUntil(
+    caches.keys().then(keys => Promise.all(
+      keys.map(key => {
+        if (key !== CACHE_NAME) return caches.delete(key);
       })
+    ))
+  );
+  return self.clients.claim();
+});
+
+// 3. Fetch Phase (Offline Capability)
+self.addEventListener('fetch', event => {
+  // Navigation requests (HTML) - Network first, fall back to cache
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request)
+        .catch(() => {
+          return caches.match('./index.html') || caches.match('./');
+        })
+    );
+    return;
+  }
+
+  // Asset requests - Cache first, fall back to network
+  event.respondWith(
+    caches.match(event.request).then(cachedResponse => {
+      return cachedResponse || fetch(event.request).then(response => {
+        return caches.open(CACHE_NAME).then(cache => {
+          // Cache new assets we encounter
+          if (event.request.url.startsWith('http')) {
+             cache.put(event.request, response.clone());
+          }
+          return response;
+        });
+      });
+    })
   );
 });
