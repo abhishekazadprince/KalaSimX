@@ -1,37 +1,26 @@
 {
-  "name": "Kala-SimuX Physics Lab",
+  "name": "Kala-SimuX Pro",
   "short_name": "Kala-SimuX",
-  "id": "/kala-simux-lab",
-  "start_url": "./index.html",
+  "start_url": "./",
   "display": "standalone",
   "background_color": "#020617",
   "theme_color": "#020617",
-  "orientation": "portrait",
+  "description": "Advanced Physics Engine and Simulation Laboratory",
+  "orientation": "any",
   "scope": "./",
+  "categories": ["education", "simulation", "productivity"],
   "icons": [
     {
-      "src": "./Kala-SimuX.png",
+      "src": "Kala-SimuX.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any"
+      "purpose": "any maskable"
     },
     {
-      "src": "./Kala-SimuX.png",
+      "src": "Kala-SimuX.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "./Kala-SimuX.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "maskable"
-    },
-    {
-      "src": "./Kala-SimuX.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "maskable"
+      "purpose": "any maskable"
     }
   ]
 }
