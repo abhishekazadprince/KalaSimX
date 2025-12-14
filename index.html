@@ -2211,14 +2211,15 @@ const traceRays = (elements) => {
     return { rays: finalRays, virtualRays: virtualRays };
 };
 
-// --- B. CANVAS COMPONENT (V10) ---
+// --- B. CANVAS COMPONENT (V11: ZOOM ENABLED) ---
 const OpticsCanvas = ({ elements, setElements, rays, camera, setCamera, is2D, selectedId, setSelectedId, environment, toolMode, setToolMode, onInitRecorder }) => {
     const canvasRef = useRef(null);
-    const gesture = useRef({ active: false, startX: 0, startY: 0, startDist: 0, mode: '' });
+    const gesture = useRef({ active: false, startX: 0, startY: 0, startDist: 0, startZoom: 1, mode: '' });
     const toolRef = useRef({ p1: null, p2: null, p3: null, isDragging: false });
     
     useEffect(() => { if(onInitRecorder && canvasRef.current) onInitRecorder(canvasRef); }, [onInitRecorder]);
 
+    // ... (Colors and Project function remain identical to previous, included here for completeness)
     const colors = useMemo(() => {
         if(environment === 'blueprint') return { bg: '#1e3a8a', grid: 'rgba(255,255,255,0.1)', axis: 'rgba(255,255,255,0.3)', text: '#93c5fd' };
         if(environment === 'matrix') return { bg: '#001100', grid: 'rgba(0,255,0,0.1)', axis: 'rgba(0,255,0,0.3)', text: '#4ade80' };
@@ -2238,6 +2239,18 @@ const OpticsCanvas = ({ elements, setElements, rays, camera, setCamera, is2D, se
             return { x: 0, y: 0 }; 
     };
 
+    // --- ZOOM HANDLER ---
+    useEffect(() => {
+        const el = canvasRef.current; if(!el) return;
+        const handleWheel = (e) => {
+            e.preventDefault();
+            const delta = -Math.sign(e.deltaY) * 0.1;
+            setCamera(prev => ({ ...prev, zoom: Math.max(0.1, Math.min(5, prev.zoom * (1 + delta))) }));
+        };
+        el.addEventListener('wheel', handleWheel, { passive: false });
+        return () => el.removeEventListener('wheel', handleWheel);
+    }, [setCamera]);
+
     useEffect(() => {
         const ctx = canvasRef.current.getContext('2d');
         let frame;
@@ -2248,11 +2261,12 @@ const OpticsCanvas = ({ elements, setElements, rays, camera, setCamera, is2D, se
             ctx.fillStyle = colors.bg; ctx.fillRect(0,0,width,height);
             
             // Grid
-            for(let i=-1000; i<=1000; i+=100) {
+            const range = 2000;
+            for(let i=-range; i<=range; i+=100) {
                  const s = project(i, 120, -100, width, height); const e = project(i, 120, 100, width, height);
                  if(s.scale>0){ ctx.beginPath(); ctx.strokeStyle=i===0?colors.axis:colors.grid; ctx.moveTo(s.x, s.y); ctx.lineTo(e.x,e.y); ctx.stroke(); }
             }
-            const sAxis = project(-1000, 120, 0, width, height); const eAxis = project(1000, 120, 0, width, height);
+            const sAxis = project(-range, 120, 0, width, height); const eAxis = project(range, 120, 0, width, height);
             ctx.beginPath(); ctx.strokeStyle = colors.axis; ctx.moveTo(sAxis.x, sAxis.y); ctx.lineTo(eAxis.x, eAxis.y); ctx.stroke();
 
             // Rays
@@ -2302,7 +2316,7 @@ const OpticsCanvas = ({ elements, setElements, rays, camera, setCamera, is2D, se
                 ctx.restore();
             });
 
-            // Tools
+            // Tools (Ruler/Protractor) - same as before
             if(toolMode !== 'none' && toolRef.current.p1) {
                 const p1 = toolRef.current.p1; const p2 = toolRef.current.p2 || p1; const p3 = toolRef.current.p3;
                 const s1 = project(p1.x, p1.y, 0, width, height); const s2 = project(p2.x, p2.y, 0, width, height);
@@ -2341,7 +2355,10 @@ const OpticsCanvas = ({ elements, setElements, rays, camera, setCamera, is2D, se
         elements.forEach(el => { const proj = project(el.x, el.y, 0, rect.width, rect.height); if(proj.scale > 0) { const d = Math.hypot(proj.x - mouseX, proj.y - mouseY); if(d < minDist) { minDist = d; closest = el; } } });
         if(closest) { setSelectedId(closest.id); gesture.current = { active: true, mode: 'drag', dragId: closest.id, lastX: mouseX }; } 
         else {
-            if (e.touches && e.touches.length === 2) { const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY); gesture.current = { active: true, mode: 'zoom', startDist: d, startZoom: camera.zoom }; } 
+            if (e.touches && e.touches.length === 2) { 
+                const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY); 
+                gesture.current = { active: true, mode: 'zoom', startDist: d, startZoom: camera.zoom }; 
+            } 
             else gesture.current = { active: true, mode: 'rotate', startX: t.clientX, startY: t.clientY };
         }
     };
@@ -2364,6 +2381,10 @@ const OpticsCanvas = ({ elements, setElements, rays, camera, setCamera, is2D, se
             gesture.current.startX = t.clientX; gesture.current.startY = t.clientY;
         } else if (gesture.current.mode === 'rotate' && is2D) {
             setCamera(prev => ({ ...prev, panX: prev.panX + (t.clientX - gesture.current.startX) })); gesture.current.startX = t.clientX;
+        } else if (gesture.current.mode === 'zoom' && e.touches && e.touches.length === 2) {
+             const dist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+             const scale = dist / gesture.current.startDist;
+             setCamera(prev => ({ ...prev, zoom: gesture.current.startZoom * scale }));
         }
     };
 
@@ -2403,6 +2424,7 @@ const RayOpticsSolver = () => {
         else if(type === 'prism_dispersion') newEls = [ {id:1, type:'source', x:-400, y:0, h:20, beam:false, color:'#ffffff'}, {id:2, type:'prism', x:0, y:0, h:100, label:'Glass Prism', n:1.5} ];
         else if(type === 'slab_refraction') newEls = [ {id:1, type:'source', x:-400, y:20, h:20, beam:false, color:'#3b82f6'}, {id:2, type:'slab', x:0, y:0, h:100, label:'Glass Slab', n:1.5} ];
         else if(type === 'telescope') newEls = [ {...baseS, beam:true, h:120, x:-600, color:'#a855f7'}, {id:2, type:'lens', f:200, x:-200, y:0, h:150, label:'Objective'}, {id:3, type:'lens', f:50, x:50, y:0, h:60, label:'Eyepiece'} ];
+        else if(type === 'microscope') newEls = [ {...baseS, beam:true, h:20, x:-250, color:'#22c55e'}, {id:2, type:'lens', f:20, x:-200, y:0, h:40, label:'Objective'}, {id:3, type:'lens', f:80, x:0, y:0, h:120, label:'Eyepiece'} ];
         else if(type === 'interferometer') newEls = [ {id:1, type:'source', x:-500, y:0, h:20, beam:false, color:'#ef4444'}, {id:2, type:'lens', f:100, x:-300, y:0, h:100, label:'Collimator'}, {id:3, type:'beamsplitter', x:0, y:0, h:100, label:'Splitter'}, {id:4, type:'mirror', f:Infinity, x:200, y:0, h:100, label:'Mirror 1'}, {id:5, type:'mirror', f:Infinity, x:-200, y:0, h:100, label:'Mirror 2'} ];
         setElements(newEls); setSelectedId(newEls[1]?.id || newEls[0]?.id); vibrate();
     };
@@ -2456,12 +2478,51 @@ const RayOpticsSolver = () => {
             {!fullScreen && (
                 <div className="flex-1 flex flex-col glass-panel overflow-hidden border-t-0">
                     <div className="flex border-b border-white/10 shrink-0 bg-slate-900/50">
-                        <button onClick={()=>setTab('lab')} className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-widest ${tab==='lab'?'text-yellow-400 bg-white/5 border-b-2 border-yellow-500':'text-slate-500'}`}>Properties</button>
-                        <button onClick={()=>setTab('data')} className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-widest ${tab==='data'?'text-yellow-400 bg-white/5 border-b-2 border-yellow-500':'text-slate-500'}`}>Data Table</button>
+                        {['story', 'textbook', 'lab', 'data'].map(id => (
+                            <button key={id} onClick={()=>setTab(id)} className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-widest transition font-display ${tab===id?'text-yellow-400 bg-white/5 border-b-2 border-yellow-500':'text-slate-500 hover:text-slate-300'}`}>{id}</button>
+                        ))}
                     </div>
-                    <div className="flex-1 overflow-y-auto scroller p-4">
+                    <div className="flex-1 overflow-y-auto scroller relative">
+                        {tab === 'story' && (
+                            <div className="p-6 space-y-8 pb-20 animate-in fade-in duration-700">
+                                <h3 className="text-yellow-500 font-bold text-xs uppercase tracking-widest mb-4 font-display">1021 AD: THE DARK ROOM</h3>
+                                <h1 className="text-3xl font-bold text-white mb-4 font-display">Alhazen's Insight</h1>
+                                <p className="text-slate-300 text-sm leading-7">
+                                    For centuries, Greeks believed our eyes shot out laser-beams to touch objects (Emission Theory). Then came <strong>Ibn al-Haytham (Alhazen)</strong>. He sat in a dark room with a tiny hole in the wall. He saw an upside-down image of the outside world projected onto the opposite wall.                                 </p>
+                                <p className="text-slate-300 text-sm leading-7 mt-4">
+                                    He realized light travels in straight lines from the object to the eye. He invented the <strong>Camera Obscura</strong> and laid the foundation for all modern optics.
+                                </p>
+                                <div className="glass-card p-4 border border-white/20 mt-6 bg-yellow-900/10">
+                                    <h4 className="text-yellow-400 font-bold font-display mb-2">Fermat's Principle (1662)</h4>
+                                    <p className="text-slate-300 text-xs leading-5">
+                                        Later, Pierre de Fermat refined this: "Light takes the path that requires the least time." This single sentence explains why light bends (refracts) when entering glass—it's taking a "shortcut" through the slower medium.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+                        {tab === 'textbook' && (
+                            <div className="p-4 pb-20">
+                                <div className="paper-bg text-sm rounded-sm mb-4 shadow-xl">
+                                    <h3 className="text-black font-bold text-xl mb-4 border-b border-black/10 pb-2">Geometrical Optics</h3>
+                                    <p><strong>1. Snell's Law (Refraction)</strong></p>
+                                    <div className="my-2 text-center"><Latex tex="n_1 \sin \theta_1 = n_2 \sin \theta_2" dark={false} /></div>
+                                    <p>Determines how much light bends at an interface.</p>
+                                    
+                                    <p className="mt-4"><strong>2. Lens Maker's Formula</strong></p>
+                                    <div className="my-2 text-center"><Latex tex="\frac{1}{f} = (n-1)\left(\frac{1}{R_1} - \frac{1}{R_2}\right)" dark={false} /></div>
+                                    
+                                    <p className="mt-4"><strong>3. Mirror Equation</strong></p>
+                                    <div className="my-2 text-center"><Latex tex="\frac{1}{f} = \frac{1}{v} + \frac{1}{u}" dark={false} /></div>
+                                    <ul className="list-disc pl-5 mt-2 space-y-1 text-xs">
+                                        <li><strong>u:</strong> Object distance (negative if real)</li>
+                                        <li><strong>v:</strong> Image distance</li>
+                                        <li><strong>f:</strong> Focal length (Positive for Convex Lens/Concave Mirror)</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        )}
                         {tab === 'lab' && selectedId && (
-                            <div className="space-y-4">
+                            <div className="p-4 space-y-4">
                                 {(() => {
                                     const el = elements.find(e => e.id === selectedId);
                                     if(!el) return null;
@@ -2470,37 +2531,39 @@ const RayOpticsSolver = () => {
                                     return (
                                         <div className="grid grid-cols-2 gap-4">
                                             <div className="col-span-2 flex justify-between items-center border-b border-white/10 pb-2">
-                                                <span className="text-yellow-400 font-bold uppercase">{el.type}</span>
-                                                <button onClick={()=>removeElement(el.id)} className="text-red-400 text-xs px-2 py-1 border border-red-500/50 rounded"><i className="fas fa-trash"></i></button>
+                                                <span className="text-yellow-400 font-bold uppercase">{el.type} Properties</span>
+                                                <button onClick={()=>removeElement(el.id)} className="text-red-400 text-xs px-2 py-1 border border-red-500/50 rounded hover:bg-red-900/20"><i className="fas fa-trash"></i> Delete</button>
                                             </div>
                                             <div className="col-span-1 space-y-2">
                                                 <ParamInput label="Position X" val={el.x} set={v=>{const n=[...elements];n[idx].x=v;setElements(n)}} step="1" min="-800" max="800"/>
-                                                {(el.type==='lens'||el.type==='mirror') && <ParamInput label="Focal Length" val={el.f} set={v=>{const n=[...elements];n[idx].f=v;setElements(n)}} step="5" min="-300" max="300"/>}
+                                                {(el.type==='lens'||el.type==='mirror') && <ParamInput label="Focal Length (f)" val={el.f} set={v=>{const n=[...elements];n[idx].f=v;setElements(n)}} step="5" min="-300" max="300"/>}
                                                 {(el.type==='lens'||el.type==='prism'||el.type==='slab') && <ParamInput label="Refractive Index (n)" val={el.n} set={v=>{const n=[...elements];n[idx].n=v;setElements(n)}} step="0.01" min="1" max="3"/>}
                                             </div>
                                             <div className="col-span-1 bg-white/5 p-3 rounded border border-white/10 flex flex-col justify-center">
-                                                <div className="text-[10px] font-bold text-slate-500 mb-1">REAL-TIME CALC</div>
+                                                <div className="text-[10px] font-bold text-slate-500 mb-1">RAY TRACING DATA</div>
                                                 <div className="text-xs font-mono space-y-1">
-                                                    <div className="flex justify-between"><span className="text-slate-400">Formula</span><span className="text-white text-[9px]">{physics.formula}</span></div>
+                                                    <div className="flex justify-between border-b border-white/5 pb-1"><span className="text-slate-400">Eq:</span><span className="text-white text-[9px]">{physics.formula}</span></div>
                                                     {(el.type==='lens'||el.type==='mirror') && <>
-                                                        <div className="flex justify-between"><span className="text-slate-400">u (Obj)</span><span>{physics.u}</span></div>
-                                                        <div className="flex justify-between"><span className="text-slate-400">v (Img)</span><span className={physics.nature==='Real'?'text-green-400':'text-purple-400'}>{physics.v}</span></div>
-                                                        <div className="flex justify-between"><span className="text-slate-400">Mag</span><span>{physics.m}x</span></div>
+                                                        <div className="flex justify-between"><span className="text-slate-400">Obj (u)</span><span>{physics.u}</span></div>
+                                                        <div className="flex justify-between"><span className="text-slate-400">Img (v)</span><span className={physics.nature==='Real'?'text-green-400':'text-purple-400'}>{physics.v}</span></div>
+                                                        <div className="flex justify-between"><span className="text-slate-400">Mag (m)</span><span>{physics.m}x</span></div>
                                                     </>}
                                                 </div>
                                             </div>
-                                            {el.type==='source' && <div className="col-span-2 flex gap-2 justify-center border-t border-white/10 pt-2">{['#fbbf24', '#ef4444', '#22c55e', '#3b82f6', '#ffffff'].map(c=><button key={c} onClick={()=>{const n=[...elements];n[idx].color=c;setElements(n)}} className={`w-6 h-6 rounded-full border ${el.color===c?'border-white':'border-transparent'}`} style={{backgroundColor:c}}/>)}</div>}
+                                            {el.type==='source' && <div className="col-span-2 flex gap-2 justify-center border-t border-white/10 pt-2">{['#fbbf24', '#ef4444', '#22c55e', '#3b82f6', '#ffffff'].map(c=><button key={c} onClick={()=>{const n=[...elements];n[idx].color=c;setElements(n)}} className={`w-6 h-6 rounded-full border ${el.color===c?'border-white':'border-transparent'} shadow-lg`} style={{backgroundColor:c}}/>)}</div>}
                                         </div>
                                     );
                                 })()}
                             </div>
                         )}
-                        {tab === 'lab' && !selectedId && <div className="text-center text-slate-500 italic mt-10">Select an element on the canvas to edit properties.</div>}
+                        {tab === 'lab' && !selectedId && <div className="text-center text-slate-500 italic mt-10 p-4">Select an optical element on the board to configure its parameters.</div>}
                         {tab === 'data' && (
-                            <table className="data-table">
-                                <thead><tr><th>Element</th><th>u</th><th>f</th><th>v</th><th>Mag</th><th>Nature</th></tr></thead>
-                                <tbody>{dataLog.map((r,i)=><tr key={i}><td className="text-yellow-400">{r.name}</td><td>{r.u}</td><td>{r.f}</td><td>{r.v}</td><td>{r.m}</td><td className={r.nature==='Real'?'text-green-400':(r.nature==='Virtual'?'text-purple-400':'text-slate-400')}>{r.nature}</td></tr>)}</tbody>
-                            </table>
+                            <div className="p-4">
+                                <table className="data-table">
+                                    <thead><tr><th>Element</th><th>u</th><th>f</th><th>v</th><th>Mag</th><th>Nature</th></tr></thead>
+                                    <tbody>{dataLog.map((r,i)=><tr key={i}><td className="text-yellow-400 font-bold">{r.name}</td><td>{r.u}</td><td>{r.f}</td><td>{r.v}</td><td>{r.m}</td><td className={r.nature==='Real'?'text-green-400':(r.nature==='Virtual'?'text-purple-400':'text-slate-400')}>{r.nature}</td></tr>)}</tbody>
+                                </table>
+                            </div>
                         )}
                     </div>
                 </div>
@@ -3075,6 +3138,360 @@ const RelativitySolver = () => {
         </div> 
     );
 };
+// --- 8. MAXWELL OMNI-SCIENCE SOLVER (FULL EDITION) ---
+const MaxwellSolver = () => {
+    const vibrate = useHaptics();
+    const audio = useAudioEngine();
+    const { btnSize, gap } = useUIAdaptation();
+    const toast = useToast();
+    
+    // UI State
+    const [fullScreen, setFullScreen] = useState(false);
+    const [tab, setTab] = useState('story');
+    const [vizTab, setVizTab] = useState('scope');
+    const [playing, setPlaying] = useState(true);
+    const [tool, setTool] = useState('none');
+    const [view3D, setView3D] = useState(false);
+    const [phaseTrails, setPhaseTrails] = useState(true);
+    const [isQuantum, setIsQuantum] = useState(false);
+    
+    // Equations State
+    const [eqMat, setEqMat] = useState("1.0 + 0.5 * sin(x/50)"); // Refractive Index n(x)
+    const [eqGain, setEqGain] = useState("-0.01"); // Gain/Loss g(x)
+    const [eqSrc, setEqSrc] = useState("sin(t * freq) * 10"); // Source f(t)
+
+    // Physics Engine Refs
+    const N = 400;
+    const physics = useRef({
+        u: new Float64Array(N),
+        u_prev: new Float64Array(N),
+        u_next: new Float64Array(N),
+        cMap: new Float64Array(N).fill(1.0),
+        gainMap: new Float64Array(N).fill(0.0),
+        t: 0,
+        scopeA: new Float64Array(256),
+        scopeB: new Float64Array(256),
+        idxA: 50, idxB: 350,
+        phaseHistory: []
+    });
+    
+    // Params
+    const [params, setParams] = useState({ c: 0.5, damp: 0.001, freq: 0.3, width: 20, srcType: 'pulse' });
+    const [telemetry, setTelemetry] = useState({ energy: 0, trans: 0, time: 0 });
+
+    const canvasRef = useRef(null); 
+    const scopeRef = useRef(null);
+    const spectroRef = useRef(null);
+    const bodeRef = useRef(null);
+    const phaseRef = useRef(null);
+    const xtRef = useRef(null);
+    const reqRef = useRef(null);
+
+    // --- MATH PARSER ---
+    const safeEval = (expr, vars) => {
+        try {
+            const func = new Function(...Object.keys(vars), `return ${parseEq(expr)};`);
+            return func(...Object.values(vars));
+        } catch(e) { return 0; }
+    };
+
+    const applyMaterialEq = () => {
+        const p = physics.current;
+        for(let i=0; i<N; i++) {
+            p.cMap[i] = Math.max(0.1, safeEval(eqMat, {x: i, N: N}));
+            p.gainMap[i] = safeEval(eqGain, {x: i, N: N});
+        }
+        toast("Material Equations Applied");
+    };
+
+    // --- VIZ HELPERS ---
+    const computeFFT = (data) => {
+        const size = 64; const step = Math.floor(data.length/size); const out = new Float32Array(size/2);
+        for(let k=0; k<size/2; k++) {
+            let re=0, im=0;
+            for(let n=0; n<size; n++) {
+                const angle = (2*Math.PI * k * n) / size;
+                re += data[n*step] * Math.cos(angle);
+                im -= data[n*step] * Math.sin(angle);
+            }
+            out[k] = Math.sqrt(re*re + im*im);
+        }
+        return out;
+    };
+
+    // --- PHYSICS LOOP ---
+    useEffect(() => {
+        const drawMain = (ctx, w, h) => {
+            ctx.fillStyle = '#020617'; ctx.fillRect(0,0,w,h);
+            const { u, cMap, gainMap, idxA, idxB } = physics.current;
+            const step = w/N;
+            
+            // 3D Projection Vars
+            const cx = w/2, cy = h/2;
+            const fov = 300;
+            const rotY = view3D ? 0.4 : 0;
+            const rotX = view3D ? 0.3 : 0;
+            const project = (x,y,z) => {
+                let x1 = x * Math.cos(rotY) - z * Math.sin(rotY); let z1 = x * Math.sin(rotY) + z * Math.cos(rotY);
+                let y2 = y * Math.cos(rotX) - z1 * Math.sin(rotX); let z2 = y * Math.sin(rotX) + z1 * Math.cos(rotX);
+                const scale = fov / (fov + z2 + 300);
+                return { x: cx + x1 * scale, y: cy + y2 * scale, s: scale };
+            }
+
+            // Draw Materials
+            for(let i=0; i<N; i++) {
+                let fill = null;
+                if(gainMap[i] > 0) fill = `rgba(0, 255, 157, ${gainMap[i]*10})`;
+                else if(gainMap[i] < 0) fill = 'rgba(255, 0, 85, 0.3)';
+                else if(cMap[i] > 1.2) fill = 'rgba(6, 182, 212, 0.2)';
+                
+                if(fill) { 
+                    if(view3D) {
+                        const p1 = project((i-N/2)*2, 50, 0); const p2 = project((i-N/2)*2 + 2, 50, 0);
+                        ctx.fillStyle = fill; ctx.fillRect(p1.x, p1.y, (p2.x-p1.x)+1, 10*p1.s);
+                    } else {
+                        ctx.fillStyle = fill; ctx.fillRect(i*step, 0, step+1, h); 
+                    }
+                }
+            }
+
+            // Draw Wave
+            ctx.beginPath();
+            ctx.strokeStyle = isQuantum ? '#d946ef' : '#00f3ff'; ctx.lineWidth = view3D ? 3 : 2; 
+            ctx.shadowBlur = 10; ctx.shadowColor = ctx.strokeStyle;
+            for(let i=0; i<N; i++) {
+                const val = isQuantum ? (u[i]**2)*10 : u[i]*10;
+                let sx, sy;
+                if(view3D) {
+                    const p = project((i-N/2)*2, -val, 0);
+                    sx = p.x; sy = p.y;
+                } else {
+                    sx = i*step; sy = h/2 - val;
+                }
+                if(i===0) ctx.moveTo(sx, sy); else ctx.lineTo(sx, sy);
+            }
+            ctx.stroke(); ctx.shadowBlur = 0;
+            
+            // Draw Probes
+            if(!view3D) {
+                ctx.strokeStyle = '#22d3ee'; ctx.strokeRect(idxA*step, 0, 1, h);
+                ctx.strokeStyle = '#fbbf24'; ctx.strokeRect(idxB*step, 0, 1, h);
+            }
+        };
+
+        const drawDecks = () => {
+            const p = physics.current;
+            if(vizTab === 'scope' && scopeRef.current) {
+                const ctx = scopeRef.current.getContext('2d');
+                const w = scopeRef.current.width = scopeRef.current.clientWidth; const h = scopeRef.current.height = scopeRef.current.clientHeight;
+                ctx.fillStyle = '#0f172a'; ctx.fillRect(0,0,w,h);
+                ctx.beginPath(); ctx.strokeStyle='#334155'; ctx.moveTo(0,h/2); ctx.lineTo(w,h/2); ctx.stroke();
+                [p.scopeA, p.scopeB].forEach((s, idx) => {
+                    ctx.beginPath(); ctx.strokeStyle = idx===0 ? '#22d3ee' : '#fbbf24';
+                    for(let i=0; i<s.length; i++) ctx.lineTo(i*(w/s.length), h/2 - s[i]*5);
+                    ctx.stroke();
+                });
+            }
+            if(vizTab === 'spectro' && spectroRef.current) {
+                const ctx = spectroRef.current.getContext('2d', {willReadFrequently:true});
+                const w = spectroRef.current.width = spectroRef.current.clientWidth; const h = spectroRef.current.height = spectroRef.current.clientHeight;
+                ctx.drawImage(spectroRef.current, 1, 0, w-1, h, 0, 0, w-1, h);
+                const fft = computeFFT(p.scopeA);
+                const ch = h/fft.length;
+                for(let i=0; i<fft.length; i++) {
+                    ctx.fillStyle = `hsl(${240 - Math.min(240, fft[i]*200)}, 100%, 50%)`;
+                    ctx.fillRect(w-2, h-(i+1)*ch, 2, ch+1);
+                }
+            }
+            if(vizTab === 'phase' && phaseRef.current) {
+                const ctx = phaseRef.current.getContext('2d');
+                const w = phaseRef.current.width = phaseRef.current.clientWidth; const h = phaseRef.current.height = phaseRef.current.clientHeight;
+                if(phaseTrails) { ctx.fillStyle = 'rgba(15,23,42,0.1)'; ctx.fillRect(0,0,w,h); } else { ctx.clearRect(0,0,w,h); }
+                ctx.strokeStyle = '#22d3ee'; ctx.beginPath();
+                if(p.phaseHistory.length > 1) {
+                    p.phaseHistory.forEach((pt, i) => {
+                        const x = w/2 + pt.u*20; const y = h/2 - pt.v*5;
+                        if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+                    });
+                    ctx.stroke();
+                }
+                const last = p.phaseHistory[p.phaseHistory.length-1];
+                if(last) { ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(w/2+last.u*20, h/2-last.v*5, 3, 0, 7); ctx.fill(); }
+            }
+            if(vizTab === 'xt' && xtRef.current) {
+                const ctx = xtRef.current.getContext('2d', {willReadFrequently:true});
+                const w = xtRef.current.width = xtRef.current.clientWidth; const h = xtRef.current.height = xtRef.current.clientHeight;
+                ctx.drawImage(xtRef.current, 0, 0, w, h-1, 0, 1, w, h-1);
+                const id = ctx.createImageData(w,1);
+                for(let i=0; i<w; i++) {
+                    const idx = Math.floor((i/w)*N);
+                    const val = p.u[idx]*20;
+                    const r = val>0?val*10:0; const b = val<0?Math.abs(val)*10:0;
+                    const g = p.gainMap[idx]>0 ? 50 : 0;
+                    id.data[i*4]=r; id.data[i*4+1]=g; id.data[i*4+2]=b; id.data[i*4+3]=255;
+                }
+                ctx.putImageData(id, 0, 0);
+            }
+        };
+
+        const loop = () => {
+            if(!playing) { reqRef.current = requestAnimationFrame(loop); return; }
+            const p = physics.current;
+            
+            // Source
+            if(params.srcType === 'custom') {
+                const val = safeEval(eqSrc, {t: p.t, freq: params.freq, width: params.width});
+                if(!isNaN(val)) { p.u[p.idxA] += val; p.u_prev[p.idxA] += val; }
+            } else if (params.srcType === 'cw') {
+                const val = Math.sin(p.t * params.freq) * 10;
+                p.u[p.idxA] += val; p.u_prev[p.idxA] += val;
+            } else if (params.srcType === 'pulse' && p.t === 5) {
+                for(let i=0; i<N; i++) {
+                     let x = i - 50; p.u[i] += Math.exp(-(x*x)/(params.width*params.width))*20; p.u_prev[i] += Math.exp(-(x*x)/(params.width*params.width))*20;
+                }
+            }
+
+            // FDTD
+            for(let i=1; i<N-1; i++) {
+                const lap = p.u[i+1] - 2*p.u[i] + p.u[i-1];
+                const localC = params.c / p.cMap[i];
+                const damp = params.damp - p.gainMap[i];
+                p.u_next[i] = 2*p.u[i] - p.u_prev[i] + (localC*localC)*lap - damp*(p.u[i]-p.u_prev[i]);
+                if(Math.abs(p.u_next[i])>100) p.u_next[i] *= 0.5;
+            }
+            p.u_next[0] = 0; p.u_next[N-1] = p.u[N-2]*0.9;
+            for(let i=0; i<N; i++) { p.u_prev[i]=p.u[i]; p.u[i]=p.u_next[i]; }
+            p.t++;
+
+            // Sampling
+            for(let i=0; i<255; i++) { p.scopeA[i]=p.scopeA[i+1]; p.scopeB[i]=p.scopeB[i+1]; }
+            p.scopeA[255] = p.u[p.idxA]; p.scopeB[255] = p.u[p.idxB];
+            
+            // Phase Logic
+            const phasePt = { u: p.u[p.idxB], v: p.u[p.idxB]-p.u_prev[p.idxB] };
+            if(phaseTrails) { p.phaseHistory.push(phasePt); if(p.phaseHistory.length>300) p.phaseHistory.shift(); }
+            else { p.phaseHistory = [phasePt]; }
+
+            // Audio Hook
+            if(p.t % 5 === 0) audio.playTone(100 + Math.abs(p.u[p.idxB])*50, 'sine', 0.1, 0.05);
+
+            if(canvasRef.current) drawMain(canvasRef.current.getContext('2d'), canvasRef.current.clientWidth, canvasRef.current.clientHeight);
+            drawDecks();
+
+            if(p.t % 10 === 0) {
+                let e = 0; for(let i=0; i<N; i++) e+=p.u[i]**2;
+                setTelemetry({ energy: e, time: p.t, trans: 0 });
+            }
+            reqRef.current = requestAnimationFrame(loop);
+        };
+        reqRef.current = requestAnimationFrame(loop);
+        return () => cancelAnimationFrame(reqRef.current);
+    }, [playing, params, eqSrc, view3D, phaseTrails, vizTab, isQuantum]);
+
+    const handleInteract = (e) => {
+        if(tool === 'none') return;
+        const cvs = canvasRef.current;
+        const rect = cvs.getBoundingClientRect();
+        const x = (e.clientX || e.touches[0].clientX) - rect.left;
+        const idx = Math.floor((x / rect.width) * N);
+        const p = physics.current;
+        for(let i=Math.max(0, idx-10); i<Math.min(N, idx+10); i++) {
+            if(tool === 'glass') { p.cMap[i] = 1.5; p.gainMap[i] = 0; }
+            if(tool === 'gain') { p.cMap[i] = 1.0; p.gainMap[i] = 0.05; }
+            if(tool === 'absorb') { p.cMap[i] = 1.0; p.gainMap[i] = -0.2; }
+        }
+    };
+
+    return (
+        <div className={`flex flex-col h-[calc(100dvh-60px)] -m-4 relative ${fullScreen ? 'fixed inset-0 z-50 m-0 bg-slate-950' : ''}`}>
+             <div className={`relative transition-all duration-500 bg-slate-900 overflow-hidden shadow-xl z-20 ${fullScreen ? 'absolute inset-0 h-full' : 'h-[50%] shrink-0'}`}>
+                <div className="absolute inset-0" onMouseDown={() => window.addEventListener('mousemove', handleInteract)} onMouseUp={() => window.removeEventListener('mousemove', handleInteract)} onClick={handleInteract}>
+                    <canvas ref={canvasRef} className="w-full h-full block cursor-crosshair" />
+                </div>
+                <div className={`absolute top-4 right-4 flex items-center ${gap}`}>
+                     <button onClick={()=>{physics.current.u.fill(0); toast("Reset")}} className={`${btnSize} rounded-full bg-slate-800/80 text-white backdrop-blur border border-white/10`}><Icons.Reset /></button>
+                     <button onClick={() => setPlaying(!playing)} className={`${btnSize} rounded-full bg-blue-600/90 text-white shadow-lg backdrop-blur`}>{playing ? <Icons.Pause /> : <Icons.Play />}</button>
+                     <button onClick={() => setView3D(!view3D)} className={`${btnSize} rounded-full ${view3D?'bg-cyan-500 text-black':'bg-slate-800 text-white'} backdrop-blur border border-white/10 font-bold text-[10px]`}>3D</button>
+                     <button onClick={() => setFullScreen(!fullScreen)} className={`${btnSize} rounded-full bg-slate-800/80 text-white backdrop-blur border border-white/10`}><Icons.Expand /></button>
+                </div>
+                <div className="absolute top-4 left-4 pointer-events-none">
+                    <div className="text-xs font-bold font-display text-cyan-400 drop-shadow-md">MAXWELL OMNI-SCIENCE</div>
+                    <div className="text-[10px] font-mono text-slate-400 mt-1">t: {telemetry.time} | E: {telemetry.energy.toFixed(1)}</div>
+                </div>
+
+                {!fullScreen && (
+                    <div className="absolute bottom-0 left-0 right-0 h-40 bg-slate-900/90 backdrop-blur border-t border-white/10 flex flex-col">
+                        <div className="flex border-b border-white/10 bg-black/40">
+                             {['scope','spectro','phase','xt'].map(id=>(
+                                 <button key={id} onClick={()=>setVizTab(id)} className={`flex-1 py-1 text-[9px] uppercase font-bold tracking-widest ${vizTab===id?'text-cyan-400 border-b-2 border-cyan-400':'text-slate-500'}`}>{id}</button>
+                             ))}
+                        </div>
+                        <div className="relative flex-1">
+                            {vizTab === 'scope' && <canvas ref={scopeRef} className="w-full h-full" />}
+                            {vizTab === 'spectro' && <canvas ref={spectroRef} className="w-full h-full" />}
+                            {vizTab === 'phase' && <div className="w-full h-full relative"><canvas ref={phaseRef} className="w-full h-full" /><button onClick={()=>setPhaseTrails(!phaseTrails)} className="absolute top-2 right-2 text-[9px] bg-slate-800 px-2 rounded text-cyan-400 border border-white/10">TRAILS: {phaseTrails?'ON':'OFF'}</button></div>}
+                            {vizTab === 'xt' && <canvas ref={xtRef} className="w-full h-full" />}
+                        </div>
+                    </div>
+                )}
+             </div>
+
+             {!fullScreen && (
+                <div className="flex-1 flex flex-col glass-panel overflow-hidden border-t-0">
+                    <div className="flex border-b border-white/10 shrink-0 bg-slate-900/50">
+                        {['story', 'lab', 'textbook'].map(id => (<button key={id} onClick={() => setTab(id)} className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-widest transition font-display ${tab === id ? 'text-cyan-400 bg-white/5 border-b-2 border-cyan-500' : 'text-slate-500 hover:text-slate-300'}`}>{id}</button>))}
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto scroller relative bg-slate-900/80">
+                         {tab === 'story' && (
+                            <div className="p-6 space-y-6 pb-20">
+                                <h3 className="text-cyan-500 font-bold text-xs uppercase tracking-widest mb-4 font-display">OMNI-SCIENCE ENGINE</h3>
+                                <p className="text-slate-300 text-sm leading-7">This is the <strong>Omni-Science Edition</strong> of the Maxwell Solver. It provides direct access to the Finite-Difference Time-Domain (FDTD) kernel. You can manipulate the fabric of space-time by painting refractive indices and gain media.</p>
+                                <div className="grid grid-cols-2 gap-2 mt-4">
+                                    <div className="glass-card p-3 border-l-2 border-cyan-500"><div className="text-[10px] font-bold text-cyan-400">Phase Space</div><div className="text-[9px] text-slate-400">Visualizes the attractor of the system (u vs du/dt).</div></div>
+                                    <div className="glass-card p-3 border-l-2 border-pink-500"><div className="text-[10px] font-bold text-pink-400">XT-Scan</div><div className="text-[9px] text-slate-400">Records the entire history of the wave in a space-time image.</div></div>
+                                </div>
+                            </div>
+                         )}
+                         {tab === 'lab' && (
+                             <div className="p-4 space-y-6 pb-20">
+                                 <div>
+                                     <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Equation Editor</div>
+                                     <div className="space-y-2">
+                                         <div className="flex items-center gap-2"><span className="text-[9px] font-mono text-cyan-400 w-8">n(x)=</span><input value={eqMat} onChange={e=>setEqMat(e.target.value)} className="flex-1 bg-black border border-white/10 rounded px-2 py-1 text-[10px] font-mono text-white" /></div>
+                                         <div className="flex items-center gap-2"><span className="text-[9px] font-mono text-green-400 w-8">g(x)=</span><input value={eqGain} onChange={e=>setEqGain(e.target.value)} className="flex-1 bg-black border border-white/10 rounded px-2 py-1 text-[10px] font-mono text-white" /></div>
+                                         <button onClick={applyMaterialEq} className="w-full py-1 bg-slate-800 text-[9px] font-bold text-cyan-400 border border-cyan-500/30 rounded hover:bg-cyan-900/30">APPLY MATERIAL EQUATIONS</button>
+                                     </div>
+                                 </div>
+                                 <div>
+                                     <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Source Control</div>
+                                     <div className="flex gap-2 mb-2">
+                                         <button onClick={()=>setParams(p=>({...p, srcType:'pulse'}))} className={`flex-1 py-1 text-[9px] border rounded ${params.srcType==='pulse'?'bg-yellow-500 text-black':'border-white/10 text-slate-400'}`}>PULSE</button>
+                                         <button onClick={()=>setParams(p=>({...p, srcType:'cw'}))} className={`flex-1 py-1 text-[9px] border rounded ${params.srcType==='cw'?'bg-yellow-500 text-black':'border-white/10 text-slate-400'}`}>CW</button>
+                                         <button onClick={()=>setParams(p=>({...p, srcType:'custom'}))} className={`flex-1 py-1 text-[9px] border rounded ${params.srcType==='custom'?'bg-pink-500 text-white':'border-white/10 text-slate-400'}`}>EQ</button>
+                                     </div>
+                                     {params.srcType === 'custom' && <input value={eqSrc} onChange={e=>setEqSrc(e.target.value)} className="w-full bg-black border border-pink-500/50 rounded px-2 py-1 text-[10px] font-mono text-pink-300 mb-2" />}
+                                     <ParamInput label="Freq" val={params.freq} set={v=>setParams(p=>({...p, freq:v}))} step="0.05" min="0.1" max="1.0" />
+                                 </div>
+                                 <div>
+                                     <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Tools</div>
+                                     <div className="grid grid-cols-4 gap-2">
+                                        <button onClick={()=>setTool('none')} className={`p-2 rounded border text-[9px] font-bold ${tool==='none'?'bg-white text-black':'bg-slate-800 text-slate-400 border-white/10'}`}>CURSOR</button>
+                                        <button onClick={()=>setTool('glass')} className={`p-2 rounded border text-[9px] font-bold ${tool==='glass'?'bg-cyan-500 text-white':'bg-slate-800 text-slate-400 border-white/10'}`}>GLASS</button>
+                                        <button onClick={()=>setTool('gain')} className={`p-2 rounded border text-[9px] font-bold ${tool==='gain'?'bg-green-500 text-white':'bg-slate-800 text-slate-400 border-white/10'}`}>GAIN</button>
+                                        <button onClick={()=>setTool('absorb')} className={`p-2 rounded border text-[9px] font-bold ${tool==='absorb'?'bg-red-500 text-white':'bg-slate-800 text-slate-400 border-white/10'}`}>ABSORB</button>
+                                     </div>
+                                     <button onClick={()=>setIsQuantum(!isQuantum)} className={`w-full mt-2 py-2 border rounded text-[10px] font-bold ${isQuantum?'bg-purple-900/50 border-purple-500 text-purple-300':'bg-slate-800 border-white/10 text-slate-400'}`}>MODE: {isQuantum?'QUANTUM (Probability)':'CLASSICAL (Field)'}</button>
+                                 </div>
+                             </div>
+                         )}
+                         {tab === 'textbook' && <div className="p-6 text-slate-400 text-xs italic text-center">Refer to Electromagnetic Theory section.</div>}
+                    </div>
+                </div>
+             )}
+        </div>
+    );
+};
 // --- SIMULATION FALLBACK ---
 const SimCanvasFallback = ({ type }) => {
     return <div className="rounded-xl overflow-hidden mt-4 shadow-inner border border-white/10 h-60 flex items-center justify-center bg-black/50 text-slate-500 font-mono text-xs">Module {type} Loading...</div>;
@@ -3103,7 +3520,8 @@ const App = () => {
         { id: 'thermo', title: 'Thermodynamics', desc: 'Stat Mech & 3 Laws', color: 'text-amber-400', iconBg: 'bg-amber-500/20' }, 
         { id: 'wave', title: 'Wave Motion', desc: 'String, Sound, & Ripples', color: 'text-pink-400', iconBg: 'bg-pink-500/20' }, 
         { id: 'optics', title: 'Ray Optics', desc: 'Lenses & Mirrors', color: 'text-yellow-400', iconBg: 'bg-yellow-500/20' },
-        { id: 'relativity', title: 'Relativity', desc: 'Aberration & Speed of Light', color: 'text-emerald-400', iconBg: 'bg-emerald-500/20' } 
+        { id: 'relativity', title: 'Relativity', desc: 'Aberration & Speed of Light', color: 'text-emerald-400', iconBg: 'bg-emerald-500/20' },
+        { id: 'maxwell', title: 'Maxwell FDTD', desc: 'Omni-Science Engine', color: 'text-green-400', iconBg: 'bg-green-500/20' }, 
     ];
 
     const BOOKS = [ 
@@ -3165,7 +3583,8 @@ const App = () => {
                                  sim === 'wave' ? <WaveSolver /> : 
                                  sim === 'quantum' ? <QuantumSolver /> :
                                  sim === 'optics' ? <RayOpticsSolver /> :
-                                 sim === 'relativity' ? <RelativitySolver /> : 
+                                 sim === 'relativity' ? <RelativitySolver /> :
+                                 sim === 'maxwell' ? <MaxwellSolver /> : // <--- ADD THIS LINE 
                                  <SimCanvasFallback type={sim} />} 
                             </div>
                         </div>
