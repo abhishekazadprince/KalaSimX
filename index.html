@@ -3141,26 +3141,39 @@ const RelativitySolver = () => {
 // --- 8. MAXWELL OMNI-SCIENCE SOLVER (FULL EDITION) ---
 const MaxwellSolver = () => {
     const vibrate = useHaptics();
-    const audio = useAudioEngine();
-    const { btnSize, gap } = useUIAdaptation();
     const toast = useToast();
-    
-    // UI State
-    const [fullScreen, setFullScreen] = useState(false);
-    const [tab, setTab] = useState('story');
-    const [vizTab, setVizTab] = useState('scope');
-    const [playing, setPlaying] = useState(true);
-    const [tool, setTool] = useState('none');
-    const [view3D, setView3D] = useState(false);
-    const [phaseTrails, setPhaseTrails] = useState(true);
-    const [isQuantum, setIsQuantum] = useState(false);
-    
-    // Equations State
-    const [eqMat, setEqMat] = useState("1.0 + 0.5 * sin(x/50)"); // Refractive Index n(x)
-    const [eqGain, setEqGain] = useState("-0.01"); // Gain/Loss g(x)
-    const [eqSrc, setEqSrc] = useState("sin(t * freq) * 10"); // Source f(t)
+    const { btnSize, gap } = useUIAdaptation();
 
-    // Physics Engine Refs
+    // --- UI STATE ---
+    const [fullScreen, setFullScreen] = useState(false);
+    const [playing, setPlaying] = useState(true);
+    const [activeTab, setActiveTab] = useState('scope'); // scope, spectro, bode, phase, xt
+    const [activeTool, setActiveTool] = useState('none');
+    const [view3D, setView3D] = useState(false);
+    const [isQuantum, setIsQuantum] = useState(false);
+    const [phaseTrails, setPhaseTrails] = useState(true);
+    
+    // Collapsible Sections
+    const [sections, setSections] = useState({ 
+        tools: true, gen: true, sim: true, modes: true, probes: true, params: true, scenarios: true 
+    });
+
+    // --- PHYSICS PARAMETERS ---
+    const [params, setParams] = useState({
+        c: 0.5, damp: 0.001, freq: 0.3, width: 20, 
+        bcLeft: 'fixed', bcRight: 'absorb',
+        srcType: 'pulse' // pulse, chirp, cw, custom
+    });
+    const [probes, setProbes] = useState({ a: 50, b: 350 });
+    const [customEqs, setCustomEqs] = useState({
+        matN: "1.0", matG: "0.0", src: "sin(t*freq) * 10"
+    });
+    // Use Ref for telemetry to prevent high-frequency re-renders
+    const telemetryRef = useRef({ energy: 0, trans: 0, time: 0 });
+    // We trigger a re-render for UI updates at a lower rate
+    const [uiTick, setUiTick] = useState(0); 
+
+    // --- PHYSICS ENGINE REFS ---
     const N = 400;
     const physics = useRef({
         u: new Float64Array(N),
@@ -3171,164 +3184,195 @@ const MaxwellSolver = () => {
         t: 0,
         scopeA: new Float64Array(256),
         scopeB: new Float64Array(256),
-        idxA: 50, idxB: 350,
         phaseHistory: []
     });
-    
-    // Params
-    const [params, setParams] = useState({ c: 0.5, damp: 0.001, freq: 0.3, width: 20, srcType: 'pulse' });
-    const [telemetry, setTelemetry] = useState({ energy: 0, trans: 0, time: 0 });
 
-    const canvasRef = useRef(null); 
-    const scopeRef = useRef(null);
-    const spectroRef = useRef(null);
-    const bodeRef = useRef(null);
-    const phaseRef = useRef(null);
-    const xtRef = useRef(null);
+    // --- CANVAS & AUDIO REFS ---
+    const mainRef = useRef(null);
+    const deckRef = useRef(null);
     const reqRef = useRef(null);
+    const audioCtx = useRef(null); // { ctx, osc, gain }
+
+    // --- INITIALIZATION ---
+    useEffect(() => {
+        // Init Audio Context (Suspended)
+        if (!audioCtx.current) {
+            const AC = window.AudioContext || window.webkitAudioContext;
+            const ctx = new AC();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start();
+            gain.gain.value = 0;
+            audioCtx.current = { ctx, osc, gain, enabled: false };
+        }
+        
+        // Resize Observer to keep canvases sharp
+        const resizeCanvas = (canvas) => {
+            if(!canvas) return;
+            const parent = canvas.parentElement;
+            if(parent) {
+                canvas.width = parent.clientWidth;
+                canvas.height = parent.clientHeight;
+            }
+        };
+
+        const ro = new ResizeObserver(entries => {
+            if(mainRef.current) resizeCanvas(mainRef.current);
+            if(deckRef.current) resizeCanvas(deckRef.current);
+        });
+
+        if(mainRef.current) ro.observe(mainRef.current.parentElement);
+        if(deckRef.current) ro.observe(deckRef.current.parentElement);
+
+        return () => ro.disconnect();
+    }, []);
 
     // --- MATH PARSER ---
     const safeEval = (expr, vars) => {
         try {
-            const func = new Function(...Object.keys(vars), `return ${parseEq(expr)};`);
-            return func(...Object.values(vars));
+            let code = expr.toLowerCase();
+            ['sin', 'cos', 'tan', 'exp', 'pow', 'sqrt', 'abs', 'log', 'pi'].forEach(k => {
+                code = code.replace(new RegExp(`(?<!Math\\.)\\b${k}\\b`, 'g'), `Math.${k==='pi'?'PI':k}`);
+            });
+            const f = new Function(...Object.keys(vars), `return ${code};`);
+            return f(...Object.values(vars));
         } catch(e) { return 0; }
     };
 
-    const applyMaterialEq = () => {
-        const p = physics.current;
-        for(let i=0; i<N; i++) {
-            p.cMap[i] = Math.max(0.1, safeEval(eqMat, {x: i, N: N}));
-            p.gainMap[i] = safeEval(eqGain, {x: i, N: N});
+    // --- AUDIO ENGINE ---
+    const toggleAudio = () => {
+        if (audioCtx.current) {
+            if (audioCtx.current.ctx.state === 'suspended') audioCtx.current.ctx.resume();
+            audioCtx.current.enabled = !audioCtx.current.enabled;
+            if (!audioCtx.current.enabled) audioCtx.current.gain.gain.setTargetAtTime(0, audioCtx.current.ctx.currentTime, 0.1);
+            if(toast) toast(audioCtx.current.enabled ? "Sonification ON" : "Sonification OFF");
         }
-        toast("Material Equations Applied");
     };
 
-    // --- VIZ HELPERS ---
-    const computeFFT = (data) => {
-        const size = 64; const step = Math.floor(data.length/size); const out = new Float32Array(size/2);
-        for(let k=0; k<size/2; k++) {
-            let re=0, im=0;
-            for(let n=0; n<size; n++) {
-                const angle = (2*Math.PI * k * n) / size;
-                re += data[n*step] * Math.cos(angle);
-                im -= data[n*step] * Math.sin(angle);
-            }
-            out[k] = Math.sqrt(re*re + im*im);
+    const updateSonification = (val) => {
+        if (audioCtx.current && audioCtx.current.enabled) {
+            const { ctx, osc, gain } = audioCtx.current;
+            const pitch = 100 + (Math.abs(val) * 800);
+            const vol = Math.min(0.15, Math.abs(val) * 0.15);
+            osc.frequency.setTargetAtTime(pitch, ctx.currentTime, 0.05);
+            gain.gain.setTargetAtTime(vol, ctx.currentTime, 0.05);
         }
-        return out;
     };
 
-    // --- PHYSICS LOOP ---
+    // --- GAME LOOP ---
     useEffect(() => {
+        const computeFFT = (data) => {
+            const size = 64; 
+            const step = Math.floor(data.length/size); 
+            const out = new Float32Array(size/2);
+            for(let k=0; k<size/2; k++) {
+                let re=0, im=0;
+                for(let n=0; n<size; n++) {
+                    const angle = (2*Math.PI * k * n) / size;
+                    re += data[n*step] * Math.cos(angle);
+                    im -= data[n*step] * Math.sin(angle);
+                }
+                out[k] = Math.sqrt(re*re + im*im);
+            }
+            return out;
+        };
+
         const drawMain = (ctx, w, h) => {
-            ctx.fillStyle = '#020617'; ctx.fillRect(0,0,w,h);
-            const { u, cMap, gainMap, idxA, idxB } = physics.current;
+            ctx.fillStyle = '#020202'; ctx.fillRect(0,0,w,h);
+            const p = physics.current;
             const step = w/N;
-            
-            // 3D Projection Vars
             const cx = w/2, cy = h/2;
             const fov = 300;
-            const rotY = view3D ? 0.4 : 0;
-            const rotX = view3D ? 0.3 : 0;
+            const rotY = view3D ? 30 * Math.PI/180 : 0;
+            const rotX = view3D ? 20 * Math.PI/180 : 0;
+            
             const project = (x,y,z) => {
-                let x1 = x * Math.cos(rotY) - z * Math.sin(rotY); let z1 = x * Math.sin(rotY) + z * Math.cos(rotY);
-                let y2 = y * Math.cos(rotX) - z1 * Math.sin(rotX); let z2 = y * Math.sin(rotX) + z1 * Math.cos(rotX);
+                let x1 = x*Math.cos(rotY) - z*Math.sin(rotY); let z1 = x*Math.sin(rotY) + z*Math.cos(rotY);
+                let y2 = y*Math.cos(rotX) - z1*Math.sin(rotX); let z2 = y*Math.sin(rotX) + z1*Math.cos(rotX);
                 const scale = fov / (fov + z2 + 300);
-                return { x: cx + x1 * scale, y: cy + y2 * scale, s: scale };
-            }
+                return { x: cx + x1*scale, y: cy + y2*scale, s: scale };
+            };
 
             // Draw Materials
             for(let i=0; i<N; i++) {
                 let fill = null;
-                if(gainMap[i] > 0) fill = `rgba(0, 255, 157, ${gainMap[i]*10})`;
-                else if(gainMap[i] < 0) fill = 'rgba(255, 0, 85, 0.3)';
-                else if(cMap[i] > 1.2) fill = 'rgba(6, 182, 212, 0.2)';
+                if(p.gainMap[i]>0) fill=`rgba(0,255,157,${p.gainMap[i]*10})`;
+                else if(p.gainMap[i]<0) fill='rgba(255,0,85,0.3)';
+                else if(p.cMap[i]>1.2) fill='rgba(0,243,255,0.2)';
                 
-                if(fill) { 
+                if(fill) {
                     if(view3D) {
-                        const p1 = project((i-N/2)*2, 50, 0); const p2 = project((i-N/2)*2 + 2, 50, 0);
-                        ctx.fillStyle = fill; ctx.fillRect(p1.x, p1.y, (p2.x-p1.x)+1, 10*p1.s);
+                        const pt = project((i/N-0.5)*400, 50, 0);
+                        if(pt.s > 0) {
+                            ctx.fillStyle = fill; ctx.fillRect(pt.x, pt.y, 2*pt.s, 10*pt.s);
+                        }
                     } else {
-                        ctx.fillStyle = fill; ctx.fillRect(i*step, 0, step+1, h); 
+                        ctx.fillStyle = fill; ctx.fillRect(i*step, 0, step+1, h);
                     }
                 }
             }
 
-            // Draw Wave
-            ctx.beginPath();
-            ctx.strokeStyle = isQuantum ? '#d946ef' : '#00f3ff'; ctx.lineWidth = view3D ? 3 : 2; 
-            ctx.shadowBlur = 10; ctx.shadowColor = ctx.strokeStyle;
-            for(let i=0; i<N; i++) {
-                const val = isQuantum ? (u[i]**2)*10 : u[i]*10;
-                let sx, sy;
-                if(view3D) {
-                    const p = project((i-N/2)*2, -val, 0);
-                    sx = p.x; sy = p.y;
-                } else {
-                    sx = i*step; sy = h/2 - val;
-                }
-                if(i===0) ctx.moveTo(sx, sy); else ctx.lineTo(sx, sy);
-            }
-            ctx.stroke(); ctx.shadowBlur = 0;
-            
             // Draw Probes
             if(!view3D) {
-                ctx.strokeStyle = '#22d3ee'; ctx.strokeRect(idxA*step, 0, 1, h);
-                ctx.strokeStyle = '#fbbf24'; ctx.strokeRect(idxB*step, 0, 1, h);
+                ctx.strokeStyle = '#00f3ff'; ctx.strokeRect(probes.a*step, 0, 1, h);
+                ctx.strokeStyle = '#ffaa00'; ctx.strokeRect(probes.b*step, 0, 1, h);
             }
+
+            // Draw Wave
+            ctx.beginPath();
+            ctx.lineWidth = view3D ? 3 : 2;
+            ctx.strokeStyle = isQuantum ? '#bc13fe' : '#00f3ff';
+            ctx.shadowBlur = 10; ctx.shadowColor = ctx.strokeStyle;
+            let started = false;
+            for(let i=0; i<N; i++) {
+                let val = isQuantum ? (p.u[i]**2)*5 : p.u[i]*10;
+                let pt = view3D ? project((i/N-0.5)*400, -val, 0) : {x: i*step, y: h/2 - val};
+                if(view3D && pt.s <= 0) continue;
+                if(!started) { ctx.moveTo(pt.x, pt.y); started=true; } else ctx.lineTo(pt.x, pt.y);
+            }
+            ctx.stroke(); ctx.shadowBlur = 0;
         };
 
-        const drawDecks = () => {
+        const drawDeck = (ctx, w, h) => {
             const p = physics.current;
-            if(vizTab === 'scope' && scopeRef.current) {
-                const ctx = scopeRef.current.getContext('2d');
-                const w = scopeRef.current.width = scopeRef.current.clientWidth; const h = scopeRef.current.height = scopeRef.current.clientHeight;
+            if(activeTab === 'scope') {
                 ctx.fillStyle = '#0f172a'; ctx.fillRect(0,0,w,h);
-                ctx.beginPath(); ctx.strokeStyle='#334155'; ctx.moveTo(0,h/2); ctx.lineTo(w,h/2); ctx.stroke();
-                [p.scopeA, p.scopeB].forEach((s, idx) => {
-                    ctx.beginPath(); ctx.strokeStyle = idx===0 ? '#22d3ee' : '#fbbf24';
-                    for(let i=0; i<s.length; i++) ctx.lineTo(i*(w/s.length), h/2 - s[i]*5);
+                ctx.strokeStyle = '#333'; ctx.beginPath(); ctx.moveTo(0,h/2); ctx.lineTo(w,h/2); ctx.stroke();
+                const drawTrace = (arr, col) => {
+                    ctx.beginPath(); ctx.strokeStyle = col;
+                    for(let i=0; i<256; i++) { const x = i*(w/256); const y = h/2 - arr[i]*5; if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); }
                     ctx.stroke();
-                });
-            }
-            if(vizTab === 'spectro' && spectroRef.current) {
-                const ctx = spectroRef.current.getContext('2d', {willReadFrequently:true});
-                const w = spectroRef.current.width = spectroRef.current.clientWidth; const h = spectroRef.current.height = spectroRef.current.clientHeight;
-                ctx.drawImage(spectroRef.current, 1, 0, w-1, h, 0, 0, w-1, h);
-                const fft = computeFFT(p.scopeA);
+                };
+                drawTrace(p.scopeA, '#00f3ff'); drawTrace(p.scopeB, '#ffaa00');
+            } else if (activeTab === 'spectro') {
+                ctx.drawImage(ctx.canvas, 1, 0, w-1, h, 0, 0, w-1, h);
+                const fft = computeFFT(p.scopeB);
                 const ch = h/fft.length;
                 for(let i=0; i<fft.length; i++) {
-                    ctx.fillStyle = `hsl(${240 - Math.min(240, fft[i]*200)}, 100%, 50%)`;
+                    const val = Math.min(255, fft[i]*200);
+                    ctx.fillStyle = `hsl(${240-val}, 100%, 50%)`;
                     ctx.fillRect(w-2, h-(i+1)*ch, 2, ch+1);
                 }
-            }
-            if(vizTab === 'phase' && phaseRef.current) {
-                const ctx = phaseRef.current.getContext('2d');
-                const w = phaseRef.current.width = phaseRef.current.clientWidth; const h = phaseRef.current.height = phaseRef.current.clientHeight;
-                if(phaseTrails) { ctx.fillStyle = 'rgba(15,23,42,0.1)'; ctx.fillRect(0,0,w,h); } else { ctx.clearRect(0,0,w,h); }
-                ctx.strokeStyle = '#22d3ee'; ctx.beginPath();
+            } else if (activeTab === 'phase') {
+                if(phaseTrails) { ctx.fillStyle='rgba(15,23,42,0.1)'; ctx.fillRect(0,0,w,h); } else ctx.clearRect(0,0,w,h);
+                ctx.strokeStyle = '#334155'; ctx.beginPath(); ctx.moveTo(0,h/2); ctx.lineTo(w,h/2); ctx.moveTo(w/2,0); ctx.lineTo(w/2,h); ctx.stroke();
+                ctx.beginPath(); ctx.strokeStyle = '#00ff9d';
                 if(p.phaseHistory.length > 1) {
-                    p.phaseHistory.forEach((pt, i) => {
-                        const x = w/2 + pt.u*20; const y = h/2 - pt.v*5;
-                        if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
-                    });
+                    p.phaseHistory.forEach((pt, i) => { const x=w/2+pt.u*20; const y=h/2-pt.v*5; if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); });
                     ctx.stroke();
                 }
                 const last = p.phaseHistory[p.phaseHistory.length-1];
                 if(last) { ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(w/2+last.u*20, h/2-last.v*5, 3, 0, 7); ctx.fill(); }
-            }
-            if(vizTab === 'xt' && xtRef.current) {
-                const ctx = xtRef.current.getContext('2d', {willReadFrequently:true});
-                const w = xtRef.current.width = xtRef.current.clientWidth; const h = xtRef.current.height = xtRef.current.clientHeight;
-                ctx.drawImage(xtRef.current, 0, 0, w, h-1, 0, 1, w, h-1);
+            } else if (activeTab === 'xt') {
+                ctx.drawImage(ctx.canvas, 0, 0, w, h-1, 0, 1, w, h-1);
                 const id = ctx.createImageData(w,1);
-                for(let i=0; i<w; i++) {
-                    const idx = Math.floor((i/w)*N);
-                    const val = p.u[idx]*20;
-                    const r = val>0?val*10:0; const b = val<0?Math.abs(val)*10:0;
-                    const g = p.gainMap[idx]>0 ? 50 : 0;
-                    id.data[i*4]=r; id.data[i*4+1]=g; id.data[i*4+2]=b; id.data[i*4+3]=255;
+                for(let x=0; x<w; x++) {
+                    const idx = Math.floor((x/w)*N); const val = p.u[idx]*10;
+                    let r=0,g=0,b=0; if(val>0){r=Math.min(255,val*10); g=r*0.2;} else{b=Math.min(255,Math.abs(val)*10); g=b*0.2;}
+                    if(p.gainMap[idx]>0) g+=50;
+                    id.data[x*4]=r; id.data[x*4+1]=g; id.data[x*4+2]=b; id.data[x*4+3]=255;
                 }
                 ctx.putImageData(id, 0, 0);
             }
@@ -3338,157 +3382,349 @@ const MaxwellSolver = () => {
             if(!playing) { reqRef.current = requestAnimationFrame(loop); return; }
             const p = physics.current;
             
-            // Source
+            // Source Logic
             if(params.srcType === 'custom') {
-                const val = safeEval(eqSrc, {t: p.t, freq: params.freq, width: params.width});
-                if(!isNaN(val)) { p.u[p.idxA] += val; p.u_prev[p.idxA] += val; }
+                const val = safeEval(customEqs.src, {t: p.t, freq: params.freq, width: params.width});
+                if(!isNaN(val)) { p.u[probes.a] += val; p.u_prev[probes.a] += val; }
             } else if (params.srcType === 'cw') {
                 const val = Math.sin(p.t * params.freq) * 10;
-                p.u[p.idxA] += val; p.u_prev[p.idxA] += val;
-            } else if (params.srcType === 'pulse' && p.t === 5) {
-                for(let i=0; i<N; i++) {
-                     let x = i - 50; p.u[i] += Math.exp(-(x*x)/(params.width*params.width))*20; p.u_prev[i] += Math.exp(-(x*x)/(params.width*params.width))*20;
-                }
+                p.u[probes.a] += val; p.u_prev[probes.a] += val;
+            } else if (params.srcType === 'pulse' && p.t % 200 === 10) {
+                for(let i=0; i<N; i++) { let x=i-probes.a; let val=Math.exp(-(x*x)/(params.width*params.width))*20; p.u[i] += val; p.u_prev[i] += val; }
+            } else if (params.srcType === 'chirp' && p.t === 10) {
+                for(let i=0; i<N; i++) { let x=i-probes.a; let val=Math.exp(-(x*x)/(params.width*params.width*4)) * Math.sin(0.05*x*x)*20; p.u[i] += val; p.u_prev[i] += val; }
             }
 
-            // FDTD
+            // FDTD Update
             for(let i=1; i<N-1; i++) {
                 const lap = p.u[i+1] - 2*p.u[i] + p.u[i-1];
                 const localC = params.c / p.cMap[i];
+                const acc = (localC*localC) * lap;
+                const vel = p.u[i] - p.u_prev[i];
                 const damp = params.damp - p.gainMap[i];
-                p.u_next[i] = 2*p.u[i] - p.u_prev[i] + (localC*localC)*lap - damp*(p.u[i]-p.u_prev[i]);
-                if(Math.abs(p.u_next[i])>100) p.u_next[i] *= 0.5;
+                p.u_next[i] = 2*p.u[i] - p.u_prev[i] + acc - (damp * vel);
+                if(Math.abs(p.u_next[i])>100) p.u_next[i]*=0.5; // Stability clamp
             }
-            p.u_next[0] = 0; p.u_next[N-1] = p.u[N-2]*0.9;
+
+            // BCs
+            if(params.bcLeft==='fixed') p.u_next[0]=0; else if(params.bcLeft==='free') p.u_next[0]=p.u_next[1]; else if(params.bcLeft==='harmonic') p.u_next[0]=Math.sin(p.t*params.freq)*20;
+            if(params.bcRight==='fixed') p.u_next[N-1]=0; else if(params.bcRight==='absorb') p.u_next[N-1]=p.u[N-2]*(1.0-params.damp-0.1);
+
             for(let i=0; i<N; i++) { p.u_prev[i]=p.u[i]; p.u[i]=p.u_next[i]; }
             p.t++;
 
-            // Sampling
+            // Data Collection
             for(let i=0; i<255; i++) { p.scopeA[i]=p.scopeA[i+1]; p.scopeB[i]=p.scopeB[i+1]; }
-            p.scopeA[255] = p.u[p.idxA]; p.scopeB[255] = p.u[p.idxB];
-            
-            // Phase Logic
-            const phasePt = { u: p.u[p.idxB], v: p.u[p.idxB]-p.u_prev[p.idxB] };
-            if(phaseTrails) { p.phaseHistory.push(phasePt); if(p.phaseHistory.length>300) p.phaseHistory.shift(); }
-            else { p.phaseHistory = [phasePt]; }
+            p.scopeA[255] = p.u[probes.a]; p.scopeB[255] = p.u[probes.b];
 
-            // Audio Hook
-            if(p.t % 5 === 0) audio.playTone(100 + Math.abs(p.u[p.idxB])*50, 'sine', 0.1, 0.05);
+            // Phase Tracking
+            const phasePt = {u: p.u[probes.b], v: (p.u[probes.b]-p.u_prev[probes.b])*10};
+            if(phaseTrails) { p.phaseHistory.push(phasePt); if(p.phaseHistory.length>300) p.phaseHistory.shift(); } else p.phaseHistory=[phasePt];
 
-            if(canvasRef.current) drawMain(canvasRef.current.getContext('2d'), canvasRef.current.clientWidth, canvasRef.current.clientHeight);
-            drawDecks();
-
-            if(p.t % 10 === 0) {
-                let e = 0; for(let i=0; i<N; i++) e+=p.u[i]**2;
-                setTelemetry({ energy: e, time: p.t, trans: 0 });
+            // Telemetry Update (Throttled)
+            if(p.t%10===0) {
+                let e=0; for(let i=0; i<N; i++) e+=p.u[i]**2;
+                let rmsA=0, rmsB=0; for(let i=0; i<256; i++) { rmsA+=p.scopeA[i]**2; rmsB+=p.scopeB[i]**2; }
+                const db = 10 * Math.log10((rmsB+1e-9)/(rmsA+1e-9));
+                telemetryRef.current = { energy: e, trans: db, time: p.t };
+                setUiTick(t => t+1); // Trigger React render for stats
+                updateSonification(p.u[probes.b]);
             }
+
+            // Render
+            if(mainRef.current) drawMain(mainRef.current.getContext('2d'), mainRef.current.width, mainRef.current.height);
+            if(deckRef.current) drawDeck(deckRef.current.getContext('2d', {willReadFrequently: true}), deckRef.current.width, deckRef.current.height);
+
             reqRef.current = requestAnimationFrame(loop);
         };
         reqRef.current = requestAnimationFrame(loop);
         return () => cancelAnimationFrame(reqRef.current);
-    }, [playing, params, eqSrc, view3D, phaseTrails, vizTab, isQuantum]);
+    }, [playing, params, probes, customEqs, view3D, activeTab, isQuantum, phaseTrails]);
 
+    // --- INTERACTIONS ---
     const handleInteract = (e) => {
-        if(tool === 'none') return;
-        const cvs = canvasRef.current;
-        const rect = cvs.getBoundingClientRect();
-        const x = (e.clientX || e.touches[0].clientX) - rect.left;
-        const idx = Math.floor((x / rect.width) * N);
+        if(!mainRef.current) return;
+        const rect = mainRef.current.getBoundingClientRect();
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        const x = clientX - rect.left;
+        const y = clientY - rect.top;
+        const idx = Math.floor((x/rect.width)*N);
         const p = physics.current;
-        for(let i=Math.max(0, idx-10); i<Math.min(N, idx+10); i++) {
-            if(tool === 'glass') { p.cMap[i] = 1.5; p.gainMap[i] = 0; }
-            if(tool === 'gain') { p.cMap[i] = 1.0; p.gainMap[i] = 0.05; }
-            if(tool === 'absorb') { p.cMap[i] = 1.0; p.gainMap[i] = -0.2; }
+        
+        if(activeTool === 'none') {
+            if(idx>0 && idx<N) { p.u[idx] = (rect.height/2 - y)*0.1; p.u_prev[idx]=p.u[idx]; }
+        } else {
+            const r = Math.floor(N/20);
+            for(let i=Math.max(0,idx-r); i<Math.min(N,idx+r); i++) {
+                if(activeTool==='glass') { p.cMap[i]=1.5; p.gainMap[i]=0; }
+                if(activeTool==='gain') { p.cMap[i]=1.0; p.gainMap[i]=0.05; }
+                if(activeTool==='absorb') { p.cMap[i]=1.0; p.gainMap[i]=-0.2; }
+            }
         }
     };
 
+    const applyEqs = () => {
+        const p = physics.current;
+        for(let i=0; i<N; i++) {
+            p.cMap[i] = safeEval(customEqs.matN, {x: i, N: N});
+            p.gainMap[i] = safeEval(customEqs.matG, {x: i, N: N});
+        }
+        if(toast) toast("Material Equations Applied");
+    };
+
+    const loadScenario = (type) => {
+        const p = physics.current;
+        p.u.fill(0); p.u_prev.fill(0); p.cMap.fill(1.0); p.gainMap.fill(0.0);
+        setParams(prev => ({...prev, srcType: 'custom'})); 
+        
+        if(type==='laser') {
+            for(let i=Math.floor(N*0.3); i<Math.floor(N*0.7); i++) { p.cMap[i]=1.0; p.gainMap[i]=0.03; }
+            p.u[200]=1; p.u_prev[200]=1;
+            setParams(prev => ({...prev, bcLeft:'fixed', bcRight:'fixed'}));
+        } else if(type==='tunnel') {
+            setIsQuantum(true); for(let i=180; i<220; i++) p.cMap[i]=0.1;
+            setParams(prev => ({...prev, srcType:'pulse'}));
+        } else if(type==='filter') {
+            for(let i=100; i<300; i+=20) { for(let j=0; j<10; j++) p.cMap[i+j]=2.0; }
+            setParams(prev => ({...prev, srcType:'chirp'}));
+        }
+    };
+
+    const generatePDF = () => {
+        const doc = new jspdf.jsPDF();
+        doc.setFillColor(0,0,0); doc.rect(0,0,210,297,'F');
+        doc.setTextColor(0,243,255); doc.setFontSize(20); doc.text("MAXWELL OMNI-SCIENCE REPORT", 105, 20, null, null, "center");
+        doc.setFontSize(10); doc.setTextColor(200,200,200); doc.text(new Date().toLocaleString(), 105, 30, null, null, "center");
+        
+        if(mainRef.current) doc.addImage(mainRef.current.toDataURL('image/jpeg'), 'JPEG', 10, 40, 190, 80);
+        if(deckRef.current) doc.addImage(deckRef.current.toDataURL('image/jpeg'), 'JPEG', 10, 130, 190, 80);
+        
+        doc.text(`Energy: ${telemetryRef.current.energy.toFixed(1)} | Trans: ${telemetryRef.current.trans.toFixed(1)} dB`, 10, 220);
+        doc.save("maxwell_report.pdf");
+    };
+
+    // --- RENDER ---
     return (
-        <div className={`flex flex-col h-[calc(100dvh-60px)] -m-4 relative ${fullScreen ? 'fixed inset-0 z-50 m-0 bg-slate-950' : ''}`}>
-             <div className={`relative transition-all duration-500 bg-slate-900 overflow-hidden shadow-xl z-20 ${fullScreen ? 'absolute inset-0 h-full' : 'h-[50%] shrink-0'}`}>
-                <div className="absolute inset-0" onMouseDown={() => window.addEventListener('mousemove', handleInteract)} onMouseUp={() => window.removeEventListener('mousemove', handleInteract)} onClick={handleInteract}>
-                    <canvas ref={canvasRef} className="w-full h-full block cursor-crosshair" />
+        <div className={`flex flex-col h-[calc(100dvh-60px)] -m-4 relative ${fullScreen ? 'fixed inset-0 z-50 m-0 bg-[#050505]' : 'bg-[#050505]'}`}>
+            
+            {/* HEADER */}
+            <div className="flex justify-between items-center p-2 border-b border-[#222] bg-black shrink-0 h-[50px]">
+                <div className="text-xs font-bold text-[#00f3ff] tracking-widest pl-2 font-display">MAXWELL <span className="text-[#555]">OMNI-SCIENCE</span></div>
+                <div className="flex gap-1">
+                    <button onClick={toggleAudio} className={`w-8 h-8 flex items-center justify-center border rounded transition ${audioCtx.current?.enabled ? 'border-[#ffaa00] text-[#ffaa00] shadow-[0_0_10px_rgba(255,170,0,0.3)]' : 'border-[#222] text-[#888]'}`}><i className="fas fa-volume-up"></i></button>
+                    <button onClick={generatePDF} className="w-8 h-8 flex items-center justify-center border border-[#222] text-[#888] rounded hover:text-white"><i className="fas fa-file-pdf"></i></button>
+                    <button onClick={()=>setFullScreen(!fullScreen)} className="w-8 h-8 flex items-center justify-center border border-[#222] text-[#888] rounded hover:text-white"><i className={`fas fa-${fullScreen?'compress':'expand'}`}></i></button>
                 </div>
-                <div className={`absolute top-4 right-4 flex items-center ${gap}`}>
-                     <button onClick={()=>{physics.current.u.fill(0); toast("Reset")}} className={`${btnSize} rounded-full bg-slate-800/80 text-white backdrop-blur border border-white/10`}><Icons.Reset /></button>
-                     <button onClick={() => setPlaying(!playing)} className={`${btnSize} rounded-full bg-blue-600/90 text-white shadow-lg backdrop-blur`}>{playing ? <Icons.Pause /> : <Icons.Play />}</button>
-                     <button onClick={() => setView3D(!view3D)} className={`${btnSize} rounded-full ${view3D?'bg-cyan-500 text-black':'bg-slate-800 text-white'} backdrop-blur border border-white/10 font-bold text-[10px]`}>3D</button>
-                     <button onClick={() => setFullScreen(!fullScreen)} className={`${btnSize} rounded-full bg-slate-800/80 text-white backdrop-blur border border-white/10`}><Icons.Expand /></button>
-                </div>
-                <div className="absolute top-4 left-4 pointer-events-none">
-                    <div className="text-xs font-bold font-display text-cyan-400 drop-shadow-md">MAXWELL OMNI-SCIENCE</div>
-                    <div className="text-[10px] font-mono text-slate-400 mt-1">t: {telemetry.time} | E: {telemetry.energy.toFixed(1)}</div>
+            </div>
+
+            {/* MAIN GRID */}
+            <div className={`flex-1 grid ${fullScreen ? 'grid-cols-[320px_1fr_320px]' : 'lg:grid-cols-[280px_1fr_280px] grid-cols-1'} overflow-hidden min-h-0`}>
+                
+                {/* LEFT PANEL */}
+                <div className={`bg-[#0e1012] border-r border-[#222] flex flex-col overflow-y-auto ${!fullScreen ? 'hidden lg:flex' : ''}`}>
+                    
+                    {/* Material Brushes */}
+                    <div className="p-3 border-b border-[#222]">
+                        <div className="text-[10px] font-bold text-[#00f3ff] mb-2 cursor-pointer flex justify-between items-center" onClick={()=>setSections(s=>({...s, tools:!s.tools}))}>MATERIAL BRUSHES <i className={`fas fa-chevron-${sections.tools?'down':'right'}`}></i></div>
+                        {sections.tools && (
+                            <div className="space-y-2 animate-fade-in">
+                                <div className="bg-black border border-[#333] p-2 text-[#aaa] text-[9px] font-mono relative">
+                                    <div className="absolute top-0 left-1 text-[8px] text-[#444] font-bold">EQUATION</div>
+                                    <Latex tex="n(x) = \sqrt{\epsilon_r \mu_r}" dark={true} />
+                                </div>
+                                <div className="bg-[#151515] border border-[#333] p-2 rounded">
+                                    <div className="text-[9px] text-[#888] mb-1">Refractive Index n(x):</div> <input value={customEqs.matN} onChange={e=>setCustomEqs({...customEqs, matN:e.target.value})} className="w-full bg-[#111] border border-[#333] text-[#00ff9d] text-[10px] p-1 mb-2 font-mono outline-none focus:border-[#00ff9d]" />
+                                    <div className="text-[9px] text-[#888] mb-1">Gain/Loss g(x):</div> <input value={customEqs.matG} onChange={e=>setCustomEqs({...customEqs, matG:e.target.value})} className="w-full bg-[#111] border border-[#333] text-[#00ff9d] text-[10px] p-1 font-mono outline-none focus:border-[#00ff9d]" />
+                                    <button onClick={applyEqs} className="w-full mt-2 border border-[#ffaa00] text-[#ffaa00] text-[9px] py-1 hover:bg-[#ffaa00]/10 rounded font-bold">APPLY EQUATIONS</button>
+                                </div>
+                                <div className="grid grid-cols-2 gap-1">
+                                    {[
+                                        {id:'none', label:'INTERACT', icon:'hand-paper', col:'#fff'},
+                                        {id:'glass', label:'GLASS (n=1.5)', icon:'square', col:'#00f3ff'},
+                                        {id:'gain', label:'LASER GAIN', icon:'bolt', col:'#00ff9d'},
+                                        {id:'absorb', label:'ABSORBER', icon:'eraser', col:'#ff0055'}
+                                    ].map(t => (
+                                        <button key={t.id} onClick={()=>setActiveTool(t.id)} className={`p-3 bg-[#111] border rounded ${activeTool===t.id ? `border-[${t.col}] text-[${t.col}] shadow-[inset_0_0_10px_${t.col}20]` : 'border-[#222] text-[#666]'} text-[9px] flex flex-col items-center gap-1 hover:bg-[#1a1a1a] transition-all`}>
+                                            <i className={`fas fa-${t.icon} text-lg`}></i> {t.label}
+                                        </button>
+                                    ))}
+                                </div>
+                                <button onClick={()=>{physics.current.cMap.fill(1); physics.current.gainMap.fill(0); if(toast) toast("Map Cleared");}} className="w-full mt-1 border border-[#333] text-[#888] text-[9px] py-1.5 hover:bg-[#222] rounded flex items-center justify-center gap-2"><i className="fas fa-trash"></i> CLEAR MATERIALS</button>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Signal Generator */}
+                    <div className="p-3 border-b border-[#222]">
+                        <div className="text-[10px] font-bold text-[#00f3ff] mb-2 cursor-pointer flex justify-between items-center" onClick={()=>setSections(s=>({...s, gen:!s.gen}))}>SIGNAL GENERATOR <i className={`fas fa-chevron-${sections.gen?'down':'right'}`}></i></div>
+                        {sections.gen && (
+                            <div className="space-y-2 animate-fade-in">
+                                <div className="bg-black border border-[#333] p-2 text-[#aaa] text-[9px] font-mono relative">
+                                    <div className="absolute top-0 left-1 text-[8px] text-[#444] font-bold">SOURCE f(t)</div>
+                                    <Latex tex="A e^{-(t-t_0)^2/w^2}" dark={true} />
+                                </div>
+                                <input value={customEqs.src} onChange={e=>{setCustomEqs({...customEqs, src:e.target.value}); setParams({...params, srcType:'custom'})}} className="w-full bg-[#111] border border-[#333] text-[#00ff9d] text-[10px] p-1 font-mono outline-none focus:border-[#00ff9d]" placeholder="Custom Eq..." />
+                                <div className="space-y-1">
+                                    <ParamInput label="Carrier Freq (ω)" val={params.freq} set={v=>setParams({...params, freq:v})} step="0.05" min="0.1" max="1.2" />
+                                    <ParamInput label="Pulse Width (w)" val={params.width} set={v=>setParams({...params, width:v})} step="1" min="5" max="50" />
+                                </div>
+                                <div className="flex gap-1">
+                                    <button onClick={()=>setParams({...params, srcType:'pulse'})} className={`flex-1 border ${params.srcType==='pulse'?'border-[#ff0055] text-[#ff0055] bg-[#ff0055]/10':'border-[#333] text-[#666]'} text-[9px] py-1.5 rounded transition`}>PULSE</button>
+                                    <button onClick={()=>setParams({...params, srcType:'chirp'})} className={`flex-1 border ${params.srcType==='chirp'?'border-[#ff0055] text-[#ff0055] bg-[#ff0055]/10':'border-[#333] text-[#666]'} text-[9px] py-1.5 rounded transition`}>CHIRP</button>
+                                </div>
+                                <button onClick={()=>{setParams({...params, srcType: params.srcType==='cw'?'pulse':'cw'})}} className={`w-full border ${params.srcType==='cw'?'border-[#ffaa00] text-[#ffaa00] shadow-[0_0_10px_rgba(255,170,0,0.2)]':'border-[#333] text-[#888]'} text-[9px] py-1.5 rounded transition`}>CONTINUOUS WAVE</button>
+                            </div>
+                        )}
+                    </div>
                 </div>
 
-                {!fullScreen && (
-                    <div className="absolute bottom-0 left-0 right-0 h-40 bg-slate-900/90 backdrop-blur border-t border-white/10 flex flex-col">
-                        <div className="flex border-b border-white/10 bg-black/40">
-                             {['scope','spectro','phase','xt'].map(id=>(
-                                 <button key={id} onClick={()=>setVizTab(id)} className={`flex-1 py-1 text-[9px] uppercase font-bold tracking-widest ${vizTab===id?'text-cyan-400 border-b-2 border-cyan-400':'text-slate-500'}`}>{id}</button>
-                             ))}
+                {/* CENTER VIZ */}
+                <div className="flex flex-col bg-[#020202] border-r border-[#222] min-h-0">
+                    {/* Canvas Area */}
+                    <div className="relative h-[60%] border-b border-[#222]">
+                        <canvas 
+                            ref={mainRef}
+                            className="w-full h-full block cursor-crosshair touch-none"
+                            onMouseDown={(e)=>{if(activeTool!=='none') handleInteract(e)}}
+                            onMouseMove={(e)=>{if((e.buttons===1 || (e.touches && e.touches.length>0)) && activeTool!=='none') handleInteract(e)}}
+                            onClick={(e)=>{if(activeTool==='none') handleInteract(e)}}
+                            onTouchStart={(e)=>{if(activeTool!=='none') handleInteract(e)}}
+                            onTouchMove={(e)=>{if(activeTool!=='none') handleInteract(e)}}
+                        />
+                        <div className="absolute top-3 left-3 border-l-[3px] border-[#00f3ff] bg-black/80 px-2 py-0.5 text-[10px] text-white font-mono pointer-events-none">FIELD AMPLITUDE (E)</div>
+                        <div className="absolute bottom-3 right-3 text-xl text-white/20 pointer-events-none"><Latex tex="\partial^2_t u = c^2 \nabla^2 u" dark={true} /></div>
+                    </div>
+
+                    {/* Analysis Deck */}
+                    <div className="flex-1 flex flex-col bg-[#080808] min-h-0">
+                        <div className="flex bg-black border-b border-[#222] overflow-x-auto no-scrollbar shrink-0 h-[35px]">
+                            {[
+                                {id:'scope', icon:'wave-square'}, {id:'spectro', icon:'water'}, 
+                                {id:'bode', icon:'chart-bar'}, {id:'phase', icon:'circle-notch'}, {id:'xt', icon:'stream'}
+                            ].map(t => (
+                                <button key={t.id} onClick={()=>setActiveTab(t.id)} className={`flex-1 px-4 border-r border-[#222] text-[9px] flex items-center justify-center gap-2 hover:bg-[#111] transition ${activeTab===t.id ? 'text-[#00f3ff] bg-[#151515] border-t-2 border-t-[#00f3ff]' : 'text-[#666]'}`}>
+                                    <i className={`fas fa-${t.icon}`}></i> {t.id.toUpperCase()}
+                                </button>
+                            ))}
                         </div>
-                        <div className="relative flex-1">
-                            {vizTab === 'scope' && <canvas ref={scopeRef} className="w-full h-full" />}
-                            {vizTab === 'spectro' && <canvas ref={spectroRef} className="w-full h-full" />}
-                            {vizTab === 'phase' && <div className="w-full h-full relative"><canvas ref={phaseRef} className="w-full h-full" /><button onClick={()=>setPhaseTrails(!phaseTrails)} className="absolute top-2 right-2 text-[9px] bg-slate-800 px-2 rounded text-cyan-400 border border-white/10">TRAILS: {phaseTrails?'ON':'OFF'}</button></div>}
-                            {vizTab === 'xt' && <canvas ref={xtRef} className="w-full h-full" />}
+                        <div className="relative flex-1 min-h-0">
+                            <canvas ref={deckRef} className="w-full h-full block" />
+                            <div className="absolute top-2 left-2 pointer-events-none">
+                                <span className="bg-black/80 px-2 py-0.5 text-[10px] text-white border-l-[3px]" style={{borderColor: activeTab==='scope'?'#ffaa00':activeTab==='spectro'?'#ff0055':activeTab==='phase'?'#00ff9d':'#fff'}}>
+                                    {activeTab.toUpperCase()}
+                                </span>
+                            </div>
+                            {activeTab==='phase' && (
+                                <button onClick={()=>setPhaseTrails(!phaseTrails)} className={`absolute top-2 right-2 border px-2 py-0.5 text-[9px] rounded ${phaseTrails?'border-[#00ff9d] text-[#00ff9d] bg-[#00ff9d]/10':'border-[#333] text-[#666]'}`}>TRAILS: {phaseTrails?'ON':'OFF'}</button>
+                            )}
                         </div>
                     </div>
-                )}
-             </div>
+                </div>
 
-             {!fullScreen && (
-                <div className="flex-1 flex flex-col glass-panel overflow-hidden border-t-0">
-                    <div className="flex border-b border-white/10 shrink-0 bg-slate-900/50">
-                        {['story', 'lab', 'textbook'].map(id => (<button key={id} onClick={() => setTab(id)} className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-widest transition font-display ${tab === id ? 'text-cyan-400 bg-white/5 border-b-2 border-cyan-500' : 'text-slate-500 hover:text-slate-300'}`}>{id}</button>))}
-                    </div>
-
-                    <div className="flex-1 overflow-y-auto scroller relative bg-slate-900/80">
-                         {tab === 'story' && (
-                            <div className="p-6 space-y-6 pb-20">
-                                <h3 className="text-cyan-500 font-bold text-xs uppercase tracking-widest mb-4 font-display">OMNI-SCIENCE ENGINE</h3>
-                                <p className="text-slate-300 text-sm leading-7">This is the <strong>Omni-Science Edition</strong> of the Maxwell Solver. It provides direct access to the Finite-Difference Time-Domain (FDTD) kernel. You can manipulate the fabric of space-time by painting refractive indices and gain media.</p>
-                                <div className="grid grid-cols-2 gap-2 mt-4">
-                                    <div className="glass-card p-3 border-l-2 border-cyan-500"><div className="text-[10px] font-bold text-cyan-400">Phase Space</div><div className="text-[9px] text-slate-400">Visualizes the attractor of the system (u vs du/dt).</div></div>
-                                    <div className="glass-card p-3 border-l-2 border-pink-500"><div className="text-[10px] font-bold text-pink-400">XT-Scan</div><div className="text-[9px] text-slate-400">Records the entire history of the wave in a space-time image.</div></div>
+                {/* RIGHT PANEL */}
+                <div className={`bg-[#0e1012] flex flex-col overflow-y-auto ${!fullScreen ? 'hidden lg:flex' : ''}`}>
+                    
+                    {/* Render Modes */}
+                    <div className="p-3 border-b border-[#222]">
+                        <div className="text-[10px] font-bold text-[#00f3ff] mb-2 cursor-pointer flex justify-between items-center" onClick={()=>setSections(s=>({...s, modes:!s.modes}))}>RENDER MODES <i className={`fas fa-chevron-${sections.modes?'down':'right'}`}></i></div>
+                        {sections.modes && (
+                            <div className="animate-fade-in space-y-2">
+                                <div className="bg-black border border-[#333] p-2 text-[#aaa] text-[9px] font-mono text-center"><Latex tex="I = |u|^2" dark={true} /></div>
+                                <button onClick={()=>setIsQuantum(!isQuantum)} className={`w-full border ${isQuantum ? 'border-[#bc13fe] text-[#bc13fe] bg-[#bc13fe]/10' : 'border-[#333] text-[#aaa]'} text-[9px] py-2 rounded flex items-center justify-center gap-2 transition`}>
+                                    <i className={`fas fa-${isQuantum?'atom':'eye'}`}></i> MODE: {isQuantum?'QUANTUM':'CLASSICAL'}
+                                </button>
+                                <button onClick={()=>setView3D(!view3D)} className={`w-full border ${view3D ? 'border-[#00f3ff] text-[#00f3ff] bg-[#00f3ff]/10' : 'border-[#333] text-[#aaa]'} text-[9px] py-2 rounded flex items-center justify-center gap-2 transition`}>
+                                    <i className="fas fa-cube"></i> 3D VIEW
+                                </button>
+                                <div className="flex gap-1 pt-1">
+                                    <button onClick={()=>setPlaying(!playing)} className={`flex-1 border ${playing?'border-[#333] text-[#888]':'border-[#00f3ff] text-[#00f3ff]'} text-[9px] py-2 rounded`}><i className={`fas fa-${playing?'pause':'play'}`}></i></button>
+                                    <button onClick={()=>{physics.current.u.fill(0); physics.current.u_prev.fill(0); physics.current.t=0; if(toast) toast("Sim Reset");}} className="flex-1 border border-[#333] text-[#888] hover:text-white text-[9px] py-2 rounded"><i className="fas fa-redo"></i> RESET</button>
                                 </div>
                             </div>
-                         )}
-                         {tab === 'lab' && (
-                             <div className="p-4 space-y-6 pb-20">
-                                 <div>
-                                     <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Equation Editor</div>
-                                     <div className="space-y-2">
-                                         <div className="flex items-center gap-2"><span className="text-[9px] font-mono text-cyan-400 w-8">n(x)=</span><input value={eqMat} onChange={e=>setEqMat(e.target.value)} className="flex-1 bg-black border border-white/10 rounded px-2 py-1 text-[10px] font-mono text-white" /></div>
-                                         <div className="flex items-center gap-2"><span className="text-[9px] font-mono text-green-400 w-8">g(x)=</span><input value={eqGain} onChange={e=>setEqGain(e.target.value)} className="flex-1 bg-black border border-white/10 rounded px-2 py-1 text-[10px] font-mono text-white" /></div>
-                                         <button onClick={applyMaterialEq} className="w-full py-1 bg-slate-800 text-[9px] font-bold text-cyan-400 border border-cyan-500/30 rounded hover:bg-cyan-900/30">APPLY MATERIAL EQUATIONS</button>
-                                     </div>
-                                 </div>
-                                 <div>
-                                     <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Source Control</div>
-                                     <div className="flex gap-2 mb-2">
-                                         <button onClick={()=>setParams(p=>({...p, srcType:'pulse'}))} className={`flex-1 py-1 text-[9px] border rounded ${params.srcType==='pulse'?'bg-yellow-500 text-black':'border-white/10 text-slate-400'}`}>PULSE</button>
-                                         <button onClick={()=>setParams(p=>({...p, srcType:'cw'}))} className={`flex-1 py-1 text-[9px] border rounded ${params.srcType==='cw'?'bg-yellow-500 text-black':'border-white/10 text-slate-400'}`}>CW</button>
-                                         <button onClick={()=>setParams(p=>({...p, srcType:'custom'}))} className={`flex-1 py-1 text-[9px] border rounded ${params.srcType==='custom'?'bg-pink-500 text-white':'border-white/10 text-slate-400'}`}>EQ</button>
-                                     </div>
-                                     {params.srcType === 'custom' && <input value={eqSrc} onChange={e=>setEqSrc(e.target.value)} className="w-full bg-black border border-pink-500/50 rounded px-2 py-1 text-[10px] font-mono text-pink-300 mb-2" />}
-                                     <ParamInput label="Freq" val={params.freq} set={v=>setParams(p=>({...p, freq:v}))} step="0.05" min="0.1" max="1.0" />
-                                 </div>
-                                 <div>
-                                     <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Tools</div>
-                                     <div className="grid grid-cols-4 gap-2">
-                                        <button onClick={()=>setTool('none')} className={`p-2 rounded border text-[9px] font-bold ${tool==='none'?'bg-white text-black':'bg-slate-800 text-slate-400 border-white/10'}`}>CURSOR</button>
-                                        <button onClick={()=>setTool('glass')} className={`p-2 rounded border text-[9px] font-bold ${tool==='glass'?'bg-cyan-500 text-white':'bg-slate-800 text-slate-400 border-white/10'}`}>GLASS</button>
-                                        <button onClick={()=>setTool('gain')} className={`p-2 rounded border text-[9px] font-bold ${tool==='gain'?'bg-green-500 text-white':'bg-slate-800 text-slate-400 border-white/10'}`}>GAIN</button>
-                                        <button onClick={()=>setTool('absorb')} className={`p-2 rounded border text-[9px] font-bold ${tool==='absorb'?'bg-red-500 text-white':'bg-slate-800 text-slate-400 border-white/10'}`}>ABSORB</button>
-                                     </div>
-                                     <button onClick={()=>setIsQuantum(!isQuantum)} className={`w-full mt-2 py-2 border rounded text-[10px] font-bold ${isQuantum?'bg-purple-900/50 border-purple-500 text-purple-300':'bg-slate-800 border-white/10 text-slate-400'}`}>MODE: {isQuantum?'QUANTUM (Probability)':'CLASSICAL (Field)'}</button>
-                                 </div>
-                             </div>
-                         )}
-                         {tab === 'textbook' && <div className="p-6 text-slate-400 text-xs italic text-center">Refer to Electromagnetic Theory section.</div>}
+                        )}
+                    </div>
+
+                    {/* Probes */}
+                    <div className="p-3 border-b border-[#222]">
+                        <div className="text-[10px] font-bold text-[#00f3ff] mb-2 cursor-pointer flex justify-between items-center" onClick={()=>setSections(s=>({...s, probes:!s.probes}))}>PROBE MANAGER <i className={`fas fa-chevron-${sections.probes?'down':'right'}`}></i></div>
+                        {sections.probes && (
+                            <div className="animate-fade-in space-y-2">
+                                <div className="bg-black border border-[#333] p-2 text-[#aaa] text-[9px] font-mono text-center">$$x_A = {probes.a}, \quad x_B = {probes.b}$$</div>
+                                <div>
+                                    <div className="flex justify-between text-[9px] text-[#00f3ff] mb-1 font-mono"><span>Probe A (In)</span> <span>{probes.a}</span></div>
+                                    <input type="range" min="0" max="400" value={probes.a} onChange={e=>setProbes({...probes, a:parseInt(e.target.value)})} className="w-full h-1 bg-[#222] appearance-none rounded" />
+                                </div>
+                                <div>
+                                    <div className="flex justify-between text-[9px] text-[#ffaa00] mb-1 font-mono"><span>Probe B (Out)</span> <span>{probes.b}</span></div>
+                                    <input type="range" min="0" max="400" value={probes.b} onChange={e=>setProbes({...probes, b:parseInt(e.target.value)})} className="w-full h-1 bg-[#222] appearance-none rounded" />
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Physics Params */}
+                    <div className="p-3 border-b border-[#222]">
+                        <div className="text-[10px] font-bold text-[#00f3ff] mb-2 cursor-pointer flex justify-between items-center" onClick={()=>setSections(s=>({...s, params:!s.params}))}>PHYSICS PARAMS <i className={`fas fa-chevron-${sections.params?'down':'right'}`}></i></div>
+                        {sections.params && (
+                            <div className="animate-fade-in space-y-1">
+                                <ParamInput label="Vacuum C" val={params.c} set={v=>setParams({...params, c:v})} step="0.01" min="0.1" max="1.0" />
+                                <ParamInput label="Damping" val={params.damp} set={v=>setParams({...params, damp:v})} step="0.001" min="0" max="0.05" />
+                                <div className="mt-2 text-[9px] text-[#666] mb-1 font-bold">BOUNDARY CONDITIONS</div>
+                                <div className="flex gap-1 mb-2">
+                                    <div className="text-[8px] text-[#555] w-8 pt-1">LEFT</div>
+                                    {['fixed','free','harmonic'].map(bc=>(<button key={bc} onClick={()=>setParams({...params, bcLeft:bc})} className={`flex-1 border ${params.bcLeft===bc?'border-[#ccc] text-[#fff] bg-[#333]':'border-[#333] text-[#555]'} text-[8px] py-1 rounded transition`}>{bc.substr(0,4).toUpperCase()}</button>))}
+                                </div>
+                                <div className="flex gap-1">
+                                    <div className="text-[8px] text-[#555] w-8 pt-1">RIGHT</div>
+                                    {['fixed','absorb'].map(bc=>(<button key={bc} onClick={()=>setParams({...params, bcRight:bc})} className={`flex-1 border ${params.bcRight===bc?'border-[#ccc] text-[#fff] bg-[#333]':'border-[#333] text-[#555]'} text-[8px] py-1 rounded transition`}>{bc.toUpperCase()}</button>))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Presets */}
+                    <div className="p-3 border-b border-[#222]">
+                        <div className="text-[10px] font-bold text-[#00f3ff] mb-2 cursor-pointer flex justify-between items-center" onClick={()=>setSections(s=>({...s, scenarios:!s.scenarios}))}>PRESETS <i className={`fas fa-chevron-${sections.scenarios?'down':'right'}`}></i></div>
+                        {sections.scenarios && (
+                            <div className="space-y-1 animate-fade-in">
+                                {[
+                                    {id:'laser', label:'LASER CAVITY', desc:'Gain medium with mirrors'},
+                                    {id:'tunnel', label:'QUANTUM TUNNEL', desc:'Barrier penetration'},
+                                    {id:'filter', label:'BRAGG FILTER', desc:'Periodic structure'}
+                                ].map(s => (
+                                    <button key={s.id} className="w-full text-left p-2 border border-[#222] hover:border-[#444] text-[#aaa] hover:text-white bg-[#111] hover:bg-[#1a1a1a] rounded transition group" onClick={()=>loadScenario(s.id)}>
+                                        <div className="text-[9px] font-bold text-[#00f3ff] group-hover:text-white">{s.label}</div>
+                                        <div className="text-[8px] text-[#555] group-hover:text-[#777]">{s.desc}</div>
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Telemetry */}
+                    <div className="p-3 mt-auto bg-[#080808] border-t border-[#222]">
+                        <div className="text-[10px] font-bold text-[#444] mb-2 tracking-widest">REAL-TIME TELEMETRY</div>
+                        <div className="flex justify-between text-[9px] text-[#888] border-b border-[#222] py-1 font-mono"><span>Total Energy</span> <span className="text-[#00ff9d]">{telemetryRef.current.energy.toFixed(1)}</span></div>
+                        <div className="flex justify-between text-[9px] text-[#888] border-b border-[#222] py-1 font-mono"><span>Transmission</span> <span className="text-[#00ff9d]">{telemetryRef.current.trans.toFixed(1)} dB</span></div>
+                        <div className="flex justify-between text-[9px] text-[#888] py-1 font-mono"><span>Time Step</span> <span className="text-[#00ff9d]">{telemetryRef.current.time}</span></div>
                     </div>
                 </div>
-             )}
+            </div>
+
+            {/* Mobile Toggle */}
+            {!fullScreen && (
+                <button onClick={()=>setFullScreen(true)} className="fixed bottom-24 right-4 w-12 h-12 bg-[#ff0055] text-white rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(255,0,85,0.4)] z-50 lg:hidden border-2 border-white/20 backdrop-blur">
+                    <i className="fas fa-expand"></i>
+                </button>
+            )}
+
+            <style>{`
+                .no-scrollbar::-webkit-scrollbar { display: none; }
+                input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; background: #00f3ff; border: 2px solid #000; border-radius: 50%; cursor: pointer; }
+                .animate-fade-in { animation: fadeIn 0.3s ease-out; }
+                @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+            `}</style>
         </div>
     );
 };
