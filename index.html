@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+    1<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -2166,395 +2166,517 @@ const WaveSolver = () => {
         </div> 
     );
 };
-// --- 5. QUANTUM SOLVER PRO (TDSE with Phase & Momentum) ---
+// --- 5. QUANTUM OMNI-SOLVER (Ultimate Research Edition V6) ---
 const QuantumSolver = () => {
+    const { btnSize, gap } = useUIAdaptation();
     const vibrate = useHaptics();
     const toast = useToast();
-    const { btnSize, gap } = useUIAdaptation();
 
-    // --- PRESETS ---
-    const PRESETS = {
-        free: { name: "Free Packet", V: (x)=>0, desc: "Gaussian traveling in vacuum" },
-        step: { name: "Potential Step", V: (x)=> x>5 ? 40 : 0, desc: "Scattering & Reflection" },
-        barrier: { name: "Tunnel Barrier", V: (x)=> (x>3 && x<5) ? 50 : 0, desc: "Quantum Tunneling Effect" },
-        well: { name: "Infinite Well", V: (x)=> (Math.abs(x)>10) ? 1000 : 0, desc: "Particle in a Box" },
-        harmonic: { name: "Harmonic Osc", V: (x)=> 0.5 * x*x, desc: "Quantized Energy Levels" },
-        draw: { name: "Hand Drawn", V: null, desc: "Draw potential with touch" }
+    // --- MODULE CONFIGURATION ---
+    const MODULES = {
+        wave: { id: 'wave', label: '1D Schrödinger (Wave Studio)', icon: 'wave-square' },
+        atom: { id: 'atom', label: 'Atomic Atlas (s,p,d,f)', icon: 'atom' },
+        bond: { id: 'bond', label: 'Molecular LCAO (Bonding)', icon: 'project-diagram' },
+        bloch: { id: 'bloch', label: 'Bloch Sphere (Qubit Lab)', icon: 'globe' }
     };
 
-    // --- STATE ---
-    const [config, setConfig] = useState('well');
-    const [playing, setPlaying] = useState(true);
+    // --- RESOLUTION SETTINGS ---
+    const RESOLUTIONS = {
+        low: { label: 'Low (Fast)', count: 5000 },
+        med: { label: 'Medium', count: 15000 },
+        high: { label: 'High (Detailed)', count: 35000 },
+        ultra: { label: 'ULTRA (Research)', count: 65000 }
+    };
+
+    // --- STATE MANAGEMENT ---
+    const [activeModule, setActiveModule] = useState('wave');
     const [fullScreen, setFullScreen] = useState(false);
-    const [tab, setTab] = useState('sim'); // sim, stats, theory
-    
-    // Wave Packet Params
-    const [packet, setPacket] = useState({ x0: -5, k0: 2, sigma: 1.5, mass: 1.0 });
-    
-    // Telemetry
-    const [stats, setStats] = useState({ norm: 1, E: 0, xAvg: 0, pAvg: 0 });
-    
-    // Refs for Physics Engine
-    const N = 200; // Grid Resolution
-    const historyRef = useRef({ phase: [], momentum: [] });
-    const physRef = useRef({
-        re: new Float32Array(N),
-        im: new Float32Array(N),
-        V: new Float32Array(N),
-        size: N,
-        dx: 0.2
+    const [playing, setPlaying] = useState(true);
+    const [resolution, setResolution] = useState('med'); // low, med, high, ultra
+
+    // 1. WAVE STATE (Ultra-Slow Default)
+    const [waveState, setWaveState] = useState({ 
+        type: 'barrier', // free, well, barrier, harmonic, step
+        k: 4.0,          // Momentum
+        width: 1.5,      // Packet Width
+        vHeight: 80,     // Potential Height
+        speed: 0.1       // Default to 10% speed for visibility
     });
 
+    // 2. ATOMIC STATE
+    const [atomState, setAtomState] = useState({ n: 4, l: 3, m: 0, Z: 1 });
+
+    // 3. BLOCH STATE
+    const [blochState, setBlochState] = useState({ theta: 0.1, phi: 0.1, autoPrecess: false, history: [] });
+
+    // 4. MOLECULAR STATE
+    const [molState, setMolState] = useState({ type: 'benzene', isoLevel: 0.002, autoRotate: true });
+
+    // 5. RESEARCH PARAMETERS
+    const [constants, setConstants] = useState({ hbar: 1.0, mass: 1.0, rajuCoef: 0.05, damping: 0.0005 });
+    const [viewConfig, setViewConfig] = useState({ 
+        phaseColor: true, rajuModel: false, showReal: false 
+    });
+
+    // --- PHYSICS KERNEL ---
     const canvasRef = useRef(null);
     const { recording, startRecording, stopRecording } = useCanvasRecorder(canvasRef);
+    const N_WAVE = 600; // High horizontal resolution
+    
+    const physRef = useRef({
+        // Wave Buffers (Double Precision)
+        re: new Float64Array(N_WAVE), im: new Float64Array(N_WAVE), 
+        prob: new Float64Array(N_WAVE), V: new Float64Array(N_WAVE), 
+        x: new Float64Array(N_WAVE),
+        // 3D Point Clouds
+        cloud: [], molCloud: [],
+        t: 0
+    });
 
-    // --- INITIALIZATION ---
-    const init = useCallback((mode = config) => {
-        const { re, im, V, size, dx } = physRef.current;
-        const x_offset = size/2;
+    // ========================================================================
+    // MATH KERNEL
+    // ========================================================================
+    const fact = (n) => { if(n<=1) return 1; let v=1; for(let i=2; i<=n; i++) v*=i; return v; };
+    
+    const laguerre = (n, alpha, x) => {
+        let L0=1, L1=1+alpha-x;
+        if(n===0) return L0; if(n===1) return L1;
+        for(let i=2; i<=n; i++) {
+            const Ln = ((2*i - 1 + alpha - x)*L1 - (i-1+alpha)*L0)/i;
+            L0=L1; L1=Ln;
+        }
+        return L1;
+    };
+
+    const getRnl = (n, l, r_in) => {
+        let r = r_in;
+        if(viewConfig.rajuModel) r = r * (1.0 - constants.rajuCoef / (r + 0.1)); 
+        const Z = atomState.Z;
+        const rho = (2*Z*r)/n;
+        const norm = Math.sqrt(Math.pow(2*Z/n, 3) * fact(n-l-1) / (2*n*fact(n+l)));
+        return norm * Math.pow(rho, l) * Math.exp(-rho/2) * laguerre(n-l-1, 2*l+1, rho);
+    };
+
+    const getYlm = (l, m, theta, phi) => {
+        const ct=Math.cos(theta), st=Math.sin(theta);
+        const cp=Math.cos(phi), sp=Math.sin(phi);
+        const cp2=Math.cos(2*phi), sp2=Math.sin(2*phi);
         
-        // 1. Setup Potential V(x)
-        if (mode !== 'draw') {
-            const vFunc = PRESETS[mode].V;
-            for(let i=0; i<size; i++) {
-                const x = (i - x_offset) * dx;
-                V[i] = vFunc(x);
+        if(l===0) return 0.282; // s
+        if(l===1) { // p
+            if(m===0) return 0.489*ct; 
+            if(m===1) return 0.489*st*cp; 
+            if(m===-1) return 0.489*st*sp; 
+        }
+        if(l===2) { // d
+            if(m===0) return 0.315*(3*ct*ct-1); 
+            if(m===1) return 1.093*st*ct*cp; 
+            if(m===-1) return 1.093*st*ct*sp;
+            if(m===2) return 0.546*st*st*cp2; 
+            if(m===-2) return 0.546*st*st*sp2; 
+        }
+        if(l===3) { // f 
+            if(m===0) return 0.373*(5*ct*ct*ct - 3*ct); 
+            if(m===1) return 0.457*st*(5*ct*ct-1)*cp; 
+            if(m===-1) return 0.457*st*(5*ct*ct-1)*sp;
+            if(m===2) return 1.445*st*st*ct*cp2; 
+            if(m===-2) return 1.445*st*st*ct*sp2;
+            if(m===3) return 0.590*st*st*st*Math.cos(3*phi); 
+            if(m===-3) return 0.590*st*st*st*Math.sin(3*phi); 
+        }
+        return 0.1;
+    };
+
+    const getPsiAtom = (x, y, z, n, l, m) => {
+        const r = Math.sqrt(x*x + y*y + z*z);
+        if(r<0.01) return 0;
+        const theta = Math.acos(z/r);
+        const phi = Math.atan2(y, x);
+        return getRnl(n,l,r) * getYlm(l,m,theta,phi);
+    };
+
+    // ========================================================================
+    // GENERATORS
+    // ========================================================================
+
+    // 1. WAVE INIT
+    const initWave = useCallback(() => {
+        const p = physRef.current;
+        const dx = 0.08; // Finer spatial grid
+        const x0 = -18; 
+        
+        for(let i=0; i<N_WAVE; i++) {
+            const x = (i - N_WAVE/2) * dx;
+            p.x[i] = x;
+            p.V[i] = 0;
+            if(waveState.type === 'well' && Math.abs(x) > 12) p.V[i] = 1000;
+            if(waveState.type === 'barrier' && Math.abs(x) < 1.0) p.V[i] = waveState.vHeight;
+            if(waveState.type === 'step' && x > 0) p.V[i] = waveState.vHeight;
+            if(waveState.type === 'harmonic') p.V[i] = 0.5 * x*x;
+
+            const k = waveState.k;
+            const sig = waveState.width;
+            const norm = 1 / Math.sqrt(sig * Math.sqrt(Math.PI));
+            const env = Math.exp(-0.5 * Math.pow((x - x0)/sig, 2));
+            p.re[i] = norm * env * Math.cos(k*x);
+            p.im[i] = norm * env * Math.sin(k*x);
+        }
+        p.t = 0;
+    }, [waveState]);
+
+    // 2. MOLECULE/ATOM CLOUDS
+    const MOLECULES = {
+        'h2o': { label: 'Water (H₂O)', scale: 3, atoms: [{x:0,y:0,z:0.2,n:2,l:1,m:0,s:1.5}, {x:1.5,y:0,z:-0.8,n:1,l:0,m:0,s:1}, {x:-1.5,y:0,z:-0.8,n:1,l:0,m:0,s:1}] },
+        'ch4': { label: 'Methane (CH₄)', scale: 3.5, atoms: [{x:0,y:0,z:0,n:2,l:1,m:0,s:1.8}, {x:1.2,y:1.2,z:1.2,n:1,l:0,m:0,s:1}, {x:-1.2,y:-1.2,z:1.2,n:1,l:0,m:0,s:1}, {x:-1.2,y:1.2,z:-1.2,n:1,l:0,m:0,s:1}, {x:1.2,y:-1.2,z:-1.2,n:1,l:0,m:0,s:1}] },
+        'benzene': { label: 'Benzene (π-System)', scale: 5, atoms: [{x:2,y:0,z:0,n:2,l:1,m:0,s:1}, {x:1,y:1.73,z:0,n:2,l:1,m:0,s:1}, {x:-1,y:1.73,z:0,n:2,l:1,m:0,s:1}, {x:-2,y:0,z:0,n:2,l:1,m:0,s:1}, {x:-1,y:-1.73,z:0,n:2,l:1,m:0,s:1}, {x:1,y:-1.73,z:0,n:2,l:1,m:0,s:1}] }
+    };
+
+    const generateClouds = useCallback(() => {
+        const count = RESOLUTIONS[resolution].count;
+
+        // ATOM
+        if(activeModule === 'atom') {
+            const points = [];
+            const { n, l, m } = atomState;
+            const limit = n*n*2.0;
+            // Adaptive sampling
+            let attempts = 0;
+            while(points.length < count && attempts < count*15) {
+                attempts++;
+                const r = Math.random()*limit; const th = Math.random()*Math.PI; const ph = Math.random()*2*Math.PI;
+                const psi = getRnl(n,l,r) * getYlm(l,m,th,ph);
+                const prob = psi*psi * r*r * Math.sin(th);
+                if(Math.random() < prob*25) {
+                    // Phase coloring
+                    points.push({ x: r*Math.sin(th)*Math.cos(ph)*12, y: r*Math.cos(th)*12, z: r*Math.sin(th)*Math.sin(ph)*12, col: psi>0?'#00f3ff':'#ff0055' });
+                }
             }
-        } else if (mode === 'draw') {
-            V.fill(0); // Clear for drawing
+            physRef.current.cloud = points;
         }
-
-        // 2. Setup Wavefunction Psi(x) - Gaussian Packet
-        const { x0, k0, sigma } = packet;
-        let normSum = 0;
         
-        for(let i=0; i<size; i++) {
-            const x = (i - x_offset) * dx;
-            // Gaussian Envelope
-            const envelope = Math.exp( -0.5 * Math.pow((x - x0)/sigma, 2) );
-            // Plane Wave Component (Rotation in complex plane)
-            re[i] = envelope * Math.cos(k0 * x);
-            im[i] = envelope * Math.sin(k0 * x);
-            normSum += (re[i]**2 + im[i]**2) * dx;
+        // MOLECULE (Dense Cloud)
+        if(activeModule === 'bond') {
+            const mol = MOLECULES[molState.type];
+            const points = [];
+            const limit = mol.scale * 2.5;
+            let attempts = 0;
+            while(points.length < count && attempts < count*10) {
+                attempts++;
+                const x = (Math.random()-0.5)*2*limit; const y = (Math.random()-0.5)*2*limit; const z = (Math.random()-0.5)*2*limit;
+                let psi = 0;
+                mol.atoms.forEach(a => { psi += a.s * getPsiAtom(x-a.x, y-a.y, z-a.z, a.n, a.l, a.m); });
+                const prob = psi*psi;
+                if(prob > molState.isoLevel && Math.random() < prob*10) {
+                    points.push({ x: x*10, y: y*10, z: z*10, col: psi>0?'#00f3ff':'#ff0055' });
+                }
+            }
+            physRef.current.molCloud = points;
         }
+    }, [activeModule, atomState, molState, resolution, constants]);
 
-        // 3. Normalize
-        const norm = 1 / Math.sqrt(normSum);
-        for(let i=0; i<size; i++) { re[i] *= norm; im[i] *= norm; }
-        
-        if(toast) toast(`System Reset: ${PRESETS[mode].name}`);
-        historyRef.current = { phase: [], momentum: [] }; // Clear graphs
+    // 3. BLOCH
+    const applyGate = (gate) => {
+        let { theta, phi } = blochState;
+        if (gate === 'X') { theta = Math.PI - theta; phi = -phi; }
+        if (gate === 'Y') { theta = Math.PI - theta; phi = Math.PI - phi; }
+        if (gate === 'Z') { phi += Math.PI; }
+        if (gate === 'H') { if(theta<0.1){theta=Math.PI/2;phi=0;} else if(Math.abs(theta-Math.PI)<0.1){theta=Math.PI/2;phi=Math.PI;} else {theta=0;phi=0;} }
+        phi = phi % (2*Math.PI);
+        setBlochState(s => ({ ...s, theta, phi, history: [...s.history, {gate, theta, phi}] }));
         vibrate();
-    }, [config, packet, vibrate, toast]);
+    };
 
-    useEffect(() => { init(); }, [init]);
+    // --- LOOP ---
+    useEffect(() => {
+        if(activeModule === 'wave') initWave();
+        if(activeModule === 'atom' || activeModule === 'bond') generateClouds();
+    }, [activeModule, initWave, generateClouds]);
 
-    // --- PHYSICS LOOP (Symplectic Interleaved) ---
     useEffect(() => {
         if(!playing) return;
         let frame;
         const loop = () => {
-            const { re, im, V, size, dx } = physRef.current;
-            const dt = 0.005; // Time step
-            const m = packet.mass;
-            const h_bar = 1; 
-            const coeff = -h_bar / (2 * m * dx * dx); // Kinetic coeff
+            // WAVE
+            if(activeModule === 'wave') {
+                const p = physRef.current;
+                // SPEED CONTROL: Default very slow
+                const dt = 0.005 * waveState.speed; 
+                const dx = 0.08;
+                
+                // Stability: Run multiple micro-steps per frame
+                for(let k=0; k<4; k++) {
+                    for(let i=1; i<N_WAVE-1; i++) {
+                        const lapRe = (p.re[i+1]-2*p.re[i]+p.re[i-1])/(dx*dx);
+                        const lapIm = (p.im[i+1]-2*p.im[i]+p.im[i-1])/(dx*dx);
+                        let V = p.V[i];
+                        if(viewConfig.rajuModel) V *= (1 - 0.01*p.prob[i]);
 
-            // SAFETY: Check for NaN explosion
-            if (isNaN(re[size/2])) { init(); return; }
-
-            // Sub-stepping for stability
-            for(let s=0; s<4; s++) {
-                // 1. Update Real part using Imaginary (Half-step)
-                // dRe/dt = H * Im
-                for(let i=1; i<size-1; i++) {
-                    const H_im = coeff * (im[i+1] - 2*im[i] + im[i-1]) + V[i] * im[i];
-                    re[i] += H_im * dt; 
+                        p.im[i] -= (-0.5*lapRe + V*p.re[i]) * dt;
+                        p.re[i] += (-0.5*lapIm + V*p.im[i]) * dt;
+                    }
                 }
-                
-                // 2. Update Imaginary part using NEW Real (Half-step)
-                // dIm/dt = -H * Re
-                for(let i=1; i<size-1; i++) {
-                    const H_re = coeff * (re[i+1] - 2*re[i] + re[i-1]) + V[i] * re[i];
-                    im[i] -= H_re * dt;
-                }
-                
-                // Absorbing Boundary Conditions (Simple dampening at edges)
-                for(let i=0; i<5; i++) { re[i]*=0.9; im[i]*=0.9; re[size-1-i]*=0.9; im[size-1-i]*=0.9; }
+                for(let i=0; i<N_WAVE; i++) p.prob[i] = p.re[i]**2 + p.im[i]**2;
             }
-
-            // --- ANALYSIS (Every frame for smoothness) ---
-            let probSum = 0;
-            let xExpect = 0;
-            let pExpect = 0;
-            let EExpect = 0;
-
-            // Momentum Space (Discrete Fourier Transform on the fly - simplified)
-            // Just calculating p_expectation directly from spatial derivatives
-            // <p> = Integral Psi* (-i d/dx) Psi
-            
-            for(let i=1; i<size-1; i++) {
-                const P = re[i]**2 + im[i]**2;
-                const x = (i - size/2) * dx;
-                
-                probSum += P * dx;
-                xExpect += x * P * dx;
-
-                // Derivatives
-                const dRe = (re[i+1] - re[i-1]) / (2*dx);
-                const dIm = (im[i+1] - im[i-1]) / (2*dx);
-                
-                // <p> contribution: Re * (-dIm) + Im * (dRe)
-                const p_density = re[i] * (-dIm) + im[i] * (dRe); // Real part of Psi* p Psi
-                pExpect += p_density * dx;
-
-                // <E> contribution: Psi* H Psi
-                // Kinetic
-                const d2Re = (re[i+1] - 2*re[i] + re[i-1])/(dx*dx);
-                const d2Im = (im[i+1] - 2*im[i] + im[i-1])/(dx*dx);
-                const K_term = -0.5 * (re[i]*d2Re + im[i]*d2Im);
-                const V_term = V[i] * P;
-                EExpect += (K_term + V_term) * dx;
+            // BLOCH ROTATION
+            if(activeModule === 'bloch' && blochState.autoPrecess) {
+                setBlochState(s => ({...s, phi: (s.phi + 0.02) % (2*Math.PI)}));
             }
-
-            // Telemetry Update (Throttled)
-            if (Math.random() > 0.5) {
-                setStats({ 
-                    norm: probSum, 
-                    xAvg: xExpect / probSum, 
-                    pAvg: pExpect / probSum,
-                    E: EExpect / probSum
-                });
-            }
-
             frame = requestAnimationFrame(loop);
         };
         loop(); return () => cancelAnimationFrame(frame);
-    }, [playing, packet, init]);
+    }, [playing, activeModule, waveState, blochState.autoPrecess, viewConfig]);
 
-    // --- INTERACTION: DRAW POTENTIAL ---
-    const handleInteract = (mx, my, w, h) => {
-        const { V, size, dx } = physRef.current;
-        // Project screen x to grid index
-        // We need to invert the camera projection approximately or just map screen width to grid
-        // Since SimCanvas uses a 3D cam, exact mapping is hard. 
-        // We'll use a simpler mapping: Center screen = Center grid.
-        
-        // Approximate scaling based on default zoom
-        const idx = Math.floor((mx / w) * size);
-        
-        if (config === 'draw' && idx > 0 && idx < size) {
-            // Draw a wall based on Y height
-            // Height 0 at bottom, 200 at top
-            const potVal = Math.max(0, (1 - my/h) * 100); 
+    // --- CANVAS ---
+    const draw = (ctx, project, w, h) => {
+        const t = Date.now();
+        // 1. WAVE (Immersive Landscape)
+        if (activeModule === 'wave') {
+            const p = physRef.current;
+            const scX = 15; const scY = 150;
             
-            // Brush width
-            for(let i=-2; i<=2; i++) {
-                if(idx+i >= 0 && idx+i < size) V[idx+i] = potVal;
+            // Background V(x) Landscape (Dark Wall)
+            ctx.fillStyle = 'rgba(255,255,255,0.08)';
+            ctx.beginPath(); ctx.moveTo(0, h);
+            for(let i=0; i<N_WAVE; i+=2) {
+                const pt = project(p.x[i]*scX, p.V[i]*0.8, 0); // V mapped to Y
+                ctx.lineTo(pt.x, pt.y);
             }
+            ctx.lineTo(w, h); ctx.fill();
+            
+            // Wave Packet with Phase Coloring
+            ctx.lineWidth = 3;
+            for(let i=0; i<N_WAVE-1; i++) {
+                if(p.prob[i] < 0.0001) continue;
+                const pt1 = project(p.x[i]*scX, p.prob[i]*scY, 0);
+                const pt2 = project(p.x[i+1]*scX, p.prob[i+1]*scY, 0);
+                
+                // Color = Phase Angle
+                const phase = Math.atan2(p.im[i], p.re[i]);
+                const hue = (phase * 180 / Math.PI + 360) % 360;
+                
+                ctx.strokeStyle = `hsl(${hue}, 100%, 65%)`;
+                ctx.beginPath(); ctx.moveTo(pt1.x, pt1.y); ctx.lineTo(pt2.x, pt2.y); ctx.stroke();
+                
+                // Vertical Fill (Glow)
+                ctx.fillStyle = `hsla(${hue}, 100%, 65%, 0.1)`;
+                const base = project(p.x[i]*scX, 0, 0);
+                ctx.fillRect(pt1.x, pt1.y, (pt2.x-pt1.x)+2, base.y - pt1.y);
+            }
+        }
+
+        // 2. BLOCH (3D Immersion)
+        else if (activeModule === 'bloch') {
+            const r = 100;
+            const {theta, phi} = blochState;
+            
+            // Back-face Grid (Dim)
+            ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+            for(let lat=-1.5; lat<1.6; lat+=0.3) {
+                ctx.beginPath();
+                for(let lng=0; lng<=6.3; lng+=0.1) {
+                    // Simple Z-sorting logic for sphere grid
+                    const p = project(r*Math.cos(lat)*Math.cos(lng), r*Math.sin(lat), r*Math.cos(lat)*Math.sin(lng));
+                    if(p.z < 0) { if(lng===0) ctx.moveTo(p.x,p.y); else ctx.lineTo(p.x,p.y); }
+                }
+                ctx.stroke();
+            }
+
+            // Front-face Grid (Bright)
+            ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+            for(let lat=-1.5; lat<1.6; lat+=0.3) {
+                ctx.beginPath();
+                for(let lng=0; lng<=6.3; lng+=0.1) {
+                    const p = project(r*Math.cos(lat)*Math.cos(lng), r*Math.sin(lat), r*Math.cos(lat)*Math.sin(lng));
+                    if(p.z >= 0) { if(lng===0) ctx.moveTo(p.x,p.y); else ctx.lineTo(p.x,p.y); }
+                }
+                ctx.stroke();
+            }
+
+            // Vector
+            const vx=r*Math.sin(theta)*Math.cos(phi); const vy=r*Math.cos(theta); const vz=r*Math.sin(theta)*Math.sin(phi);
+            const ori=project(0,0,0); const tip=project(vx,vy,vz);
+            
+            ctx.strokeStyle='#00f3ff'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(ori.x,ori.y); ctx.lineTo(tip.x,tip.y); ctx.stroke();
+            ctx.fillStyle='#00f3ff'; ctx.beginPath(); ctx.arc(tip.x,tip.y,6*tip.s,0,7); ctx.fill();
+            
+            // Labels
+            const np=project(0,r,0); ctx.fillStyle='#fff'; ctx.fillText('|0⟩', np.x, np.y-10);
+            const sp=project(0,-r,0); ctx.fillText('|1⟩', sp.x, sp.y+15);
+        }
+
+        // 3. ATOM/MOLECULE (Volumetric)
+        else if (activeModule === 'atom' || activeModule === 'bond') {
+            const pts = activeModule === 'atom' ? physRef.current.cloud : physRef.current.molCloud;
+            const rot = molState.autoRotate ? t*0.0004 : 0;
+            
+            const sorted = pts.map(p => {
+                const x = p.x*Math.cos(rot) - p.z*Math.sin(rot);
+                const z = p.x*Math.sin(rot) + p.z*Math.cos(rot);
+                const proj = project(x, p.y, z);
+                return { ...p, ...proj };
+            }).sort((a,b) => b.z - a.z);
+
+            // Cloud Rendering (smaller particles, higher count)
+            sorted.forEach(p => {
+                if(p.s > 0) {
+                    ctx.fillStyle = p.col;
+                    // Depth Fog: Fades out in back
+                    ctx.globalAlpha = Math.max(0.15, 0.8 * (p.s / 2.0)); 
+                    const sz = Math.max(0.8, 2.0 * p.s);
+                    ctx.fillRect(p.x, p.y, sz, sz);
+                }
+            });
+            ctx.globalAlpha = 1.0;
         }
     };
 
-    // --- RENDERER ---
-    const draw = (ctx, project, w, h) => {
-        const { re, im, V, size, dx } = physRef.current;
-        const x_offset = size/2;
+    // --- PDF REPORT ---
+    const generateReport = () => {
+        const doc = new jspdf.jsPDF();
+        doc.setFillColor(10, 15, 30); doc.rect(0, 0, 210, 297, 'F');
+        doc.setTextColor(0, 240, 255); doc.setFontSize(20);
+        doc.text("QUANTUM RESEARCH REPORT", 105, 20, {align: 'center'});
+        
+        let y = 50;
+        doc.setTextColor(255,255,255); doc.setFontSize(10);
 
-        // 1. Draw Potential V(x) (Gray Walls)
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-        ctx.beginPath();
-        for(let i=0; i<size; i++) {
-            const x = (i - x_offset) * dx;
-            const y = V[i] * 0.5; // Scale height
-            const p = project(x*10, y, 0); // Scale x for view
-            if(i===0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+        if(activeModule === 'wave') {
+            doc.text(`1D Wave Simulation: k=${waveState.k}, Width=${waveState.width}`, 15, y); y+=10;
+            const p = physRef.current;
+            const rows = [];
+            for(let i=0; i<N_WAVE; i+=5) { // Denser Sampling
+                if(Math.abs(p.x[i])<20) rows.push([p.x[i].toFixed(2), p.re[i].toFixed(5), p.im[i].toFixed(5), p.prob[i].toFixed(5), p.V[i].toFixed(1)]);
+            }
+            doc.autoTable({ startY: y, head: [['x', 'Re[ψ]', 'Im[ψ]', '|ψ|²', 'V(x)']], body: rows, theme: 'grid' });
         }
-        ctx.stroke();
-        
-        // Fill area under potential
-        const pStart = project(-x_offset*dx*10, 0, 0);
-        const pEnd = project(x_offset*dx*10, 0, 0);
-        ctx.lineTo(pEnd.x, pEnd.y);
-        ctx.lineTo(pStart.x, pStart.y);
-        ctx.fill();
-
-        // 2. Draw Wavefunction (Complex Ribbon)
-        // We draw small quads. Height = |Psi|^2. Color = Phase.
-        const ribbonWidth = 2; // Thickness in Z dimension
-        
-        for(let i=0; i<size-1; i++) {
-            const x = (i - x_offset) * dx * 10;
-            const prob = (re[i]**2 + im[i]**2) * 50; // Amplitude Scale
-            if (prob < 0.1) continue;
-
-            const phase = Math.atan2(im[i], re[i]); // -PI to PI
-            const hue = ((phase + Math.PI) / (2*Math.PI)) * 360; // Map to 0-360
-            
-            const p1 = project(x, prob, -ribbonWidth);
-            const p2 = project(x, prob, ribbonWidth);
-            const p3 = project(x, 0, ribbonWidth);
-            const p4 = project(x, 0, -ribbonWidth);
-
-            ctx.fillStyle = `hsla(${hue}, 100%, 60%, 0.8)`;
-            ctx.beginPath();
-            ctx.moveTo(p1.x, p1.y);
-            ctx.lineTo(p2.x, p2.y);
-            ctx.lineTo(p3.x, p3.y);
-            ctx.lineTo(p4.x, p4.y);
-            ctx.fill();
+        else if(activeModule === 'bloch') {
+            doc.text(`Qubit State: θ=${blochState.theta.toFixed(4)}, φ=${blochState.phi.toFixed(4)}`, 15, y); y+=10;
+            const rows = blochState.history.map((h,i) => [i+1, h.gate, h.theta.toFixed(3), h.phi.toFixed(3)]);
+            doc.autoTable({ startY: y, head: [['Step', 'Gate', 'Theta', 'Phi']], body: rows, theme: 'grid' });
+        }
+        else if(activeModule === 'atom') {
+            doc.text(`Atomic Orbital: n=${atomState.n}, l=${atomState.l}, m=${atomState.m}, Z=${atomState.Z}`, 15, y); y+=10;
+            const rows = [];
+            for(let r=0; r<=20; r+=0.2) {
+                const R = getRnl(atomState.n, atomState.l, r);
+                rows.push([r.toFixed(1), R.toFixed(6), (R*R*r*r).toFixed(6)]);
+            }
+            doc.autoTable({ startY: y, head: [['r (a0)', 'R(r)', 'P(r)']], body: rows, theme: 'grid' });
+        }
+        else if(activeModule === 'bond') {
+             const mol = MOLECULES[molState.type];
+             doc.text(`Molecular Orbital: ${mol.label}`, 15, y); y+=10;
+             const rows = [];
+             for(let x=-4; x<=4; x+=0.5) {
+                 let r = [x.toFixed(1)];
+                 for(let yy=-1; yy<=1; yy+=1) {
+                     let psi=0; mol.atoms.forEach(a => { psi += a.s * getPsiAtom(x-a.x, yy-a.y, -a.z, a.n, a.l, a.m); });
+                     r.push(psi.toFixed(4));
+                 }
+                 rows.push(r);
+             }
+             doc.autoTable({ startY: y, head: [['X / Y', 'Y=-1', 'Y=0', 'Y=1']], body: rows, theme: 'grid' });
         }
 
-        // 3. Draw Expectation Marker <x>
-        const exX = stats.xAvg * 10;
-        const pEx = project(exX, 0, 0);
-        ctx.fillStyle = '#fff';
-        ctx.beginPath(); ctx.arc(pEx.x, pEx.y, 4, 0, 7); ctx.fill();
-        ctx.fillText("<x>", pEx.x, pEx.y - 10);
+        doc.save("Quantum_Lab_Report.pdf");
+        toast("Report Generated");
     };
 
     return (
         <div className={`flex flex-col h-[calc(100dvh-60px)] -m-4 relative ${fullScreen ? 'fixed inset-0 z-50 m-0 bg-slate-950' : ''}`}>
             
-            {/* 3D VIEWPORT */}
-            <div className={`relative transition-all duration-500 bg-slate-900 overflow-hidden shadow-xl z-20 ${fullScreen ? 'absolute inset-0 h-full' : 'h-[50%] shrink-0'}`}>
-                <SimCanvas 
-                    draw={draw} 
-                    initZoom={20} 
-                    interact={handleInteract}
-                    onInitRecorder={(ref) => canvasRef.current = ref.current} 
-                />
+            {/* VIEWPORT */}
+            <div className={`relative transition-all duration-500 bg-slate-900 overflow-hidden shadow-xl z-20 ${fullScreen ? 'h-full' : 'h-[55%] shrink-0'}`}>
+                <SimCanvas draw={draw} initZoom={activeModule==='bloch'?35:18} onInitRecorder={(ref) => canvasRef.current = ref.current} />
                 
-                {/* HUD Controls */}
-                <div className={`absolute top-4 right-4 flex items-center ${gap}`}>
+                <div className="absolute top-4 right-4 flex gap-2">
                     <button onClick={recording ? stopRecording : startRecording} className={`${btnSize} rounded-full backdrop-blur border border-white/10 ${recording ? 'bg-red-500/20 text-red-500 animate-pulse' : 'bg-slate-800/80 text-white'}`}>{recording ? <Icons.StopRec /> : <Icons.Record />}</button>
-                    <button onClick={() => init()} className={`${btnSize} rounded-full bg-slate-800/80 text-slate-400 hover:text-white backdrop-blur border border-white/10`}><Icons.Reset /></button>
-                    <button onClick={() => setPlaying(!playing)} className={`${btnSize} rounded-full bg-blue-600/90 text-white shadow-lg backdrop-blur`}>{playing ? <Icons.Pause /> : <Icons.Play />}</button>
-                    <button onClick={() => setFullScreen(!fullScreen)} className={`${btnSize} rounded-full bg-slate-800/80 text-slate-400 hover:text-white backdrop-blur border border-white/10`}>{fullScreen ? <Icons.Shrink /> : <Icons.Expand />}</button>
+                    <button onClick={()=>setFullScreen(!fullScreen)} className={`${btnSize} rounded-full bg-slate-800/80 text-slate-400 hover:text-white backdrop-blur border border-white/10`}><Icons.Shrink /></button>
                 </div>
 
-                {/* Telemetry Overlay */}
-                <div className="absolute top-4 left-4 pointer-events-none">
-                    <div className="glass-panel p-2 rounded border-l-2 border-cyan-400 mb-2">
-                        <div className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Expectation Values</div>
-                        <div className="font-mono text-xs text-cyan-300">{'<x>'} : {stats.xAvg.toFixed(2)}</div>
-                        <div className="font-mono text-xs text-pink-300">{'<p>'} : {stats.pAvg.toFixed(2)}</div>
-                        <div className="font-mono text-xs text-yellow-300">{'<E>'} : {stats.E.toFixed(2)}</div>
-                    </div>
-                    {/* Phase Legend */}
-                    <div className="glass-panel p-2 rounded flex items-center gap-2">
-                        <div className="w-16 h-2 rounded bg-gradient-to-r from-red-500 via-green-500 to-blue-500"></div>
-                        <span className="text-[9px] text-slate-400">Phase Angle</span>
-                    </div>
+                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1 bg-black/60 p-1 rounded-full backdrop-blur border border-white/10 overflow-x-auto max-w-[90%]">
+                    {Object.values(MODULES).map(m => (
+                        <button key={m.id} onClick={()=>{setActiveModule(m.id); vibrate();}} className={`px-4 py-2 rounded-full text-[10px] font-bold uppercase transition flex items-center gap-2 whitespace-nowrap ${activeModule===m.id ? 'bg-cyan-600 text-white shadow-[0_0_15px_rgba(6,182,212,0.5)]' : 'text-slate-400 hover:text-white'}`}>
+                            <i className={`fas fa-${m.icon}`}></i> {m.label}
+                        </button>
+                    ))}
                 </div>
             </div>
 
-            {/* CONTROL DECK */}
+            {/* CONTROLS */}
             {!fullScreen && (
                 <div className="flex-1 flex flex-col glass-panel overflow-hidden border-t-0">
-                    <div className="flex border-b border-white/10 shrink-0 bg-slate-900/50">
-                        {['sim', 'lab', 'theory'].map(id => (
-                            <button key={id} onClick={() => setTab(id)} className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-widest transition font-display ${tab === id ? 'text-cyan-400 bg-white/5 border-b-2 border-cyan-500' : 'text-slate-500 hover:text-slate-300'}`}>{id}</button>
-                        ))}
+                    <div className="h-10 border-b border-white/10 flex items-center px-4 bg-slate-900/50 gap-4 overflow-x-auto whitespace-nowrap shrink-0">
+                        <span className="text-[9px] font-bold text-slate-500">EQ:</span>
+                        <div className="flex-1 font-mono text-cyan-300 text-[10px] flex items-center gap-3">
+                            {activeModule === 'atom' && <Latex tex="E_n = -13.6 Z^2 / n^2" />}
+                            {activeModule === 'wave' && <Latex tex="i\hbar \dot{\psi} = \hat{H}\psi" />}
+                            {activeModule === 'bloch' && <Latex tex="|\psi\rangle = \alpha|0\rangle + \beta|1\rangle" />}
+                            {activeModule === 'bond' && <Latex tex="\Psi = \sum c_i \phi_i" />}
+                        </div>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto scroller relative bg-slate-900/80">
-                        
-                        {tab === 'sim' && (
-                            <div className="p-4 space-y-4">
-                                {/* Scenarios */}
-                                <div>
-                                    <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Experiment Setup</div>
-                                    <div className="grid grid-cols-3 gap-2">
-                                        {Object.entries(PRESETS).map(([k,v]) => (
-                                            <button key={k} onClick={()=>{setConfig(k); init(k);}} className={`p-2 rounded border text-center transition ${config===k ? 'bg-cyan-500/20 border-cyan-500 text-cyan-200' : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-500'}`}>
-                                                <div className="text-[9px] font-bold font-display uppercase">{v.name}</div>
-                                            </button>
-                                        ))}
-                                    </div>
-                                    <div className="text-[10px] text-slate-500 mt-1 italic text-center">{PRESETS[config].desc}</div>
+                    <div className="flex-1 overflow-y-auto scroller p-4 bg-slate-900/80">
+                        {/* ATOM CONTROLS */}
+                        {activeModule === 'atom' && (
+                            <div className="glass-card p-3 border-l-2 border-cyan-500">
+                                <div className="text-[10px] font-bold text-cyan-500 mb-2 uppercase">Configuration</div>
+                                <div className="grid grid-cols-3 gap-2">
+                                    <div className="bg-slate-800 p-2 rounded"><div className="text-[8px] text-slate-500">n</div><input type="number" value={atomState.n} onChange={e=>setAtomState({...atomState, n:parseInt(e.target.value)})} className="w-full bg-transparent text-white text-xs outline-none"/></div>
+                                    <div className="bg-slate-800 p-2 rounded"><div className="text-[8px] text-slate-500">l</div><input type="number" value={atomState.l} onChange={e=>setAtomState({...atomState, l:parseInt(e.target.value)})} className="w-full bg-transparent text-white text-xs outline-none"/></div>
+                                    <div className="bg-slate-800 p-2 rounded"><div className="text-[8px] text-slate-500">m</div><input type="number" value={atomState.m} onChange={e=>setAtomState({...atomState, m:parseInt(e.target.value)})} className="w-full bg-transparent text-white text-xs outline-none"/></div>
                                 </div>
-
-                                {/* Packet Controls */}
-                                <div className="glass-card p-3 border-l-2 border-pink-500">
-                                    <div className="text-[10px] font-bold text-pink-500 uppercase tracking-wider mb-2">Wave Packet Properties</div>
-                                    <ParamInput label="Initial Position (x₀)" val={packet.x0} set={v=>setPacket({...packet, x0:v})} step="0.5" min="-10" max="0" />
-                                    <ParamInput label="Momentum (k₀)" val={packet.k0} set={v=>setPacket({...packet, k0:v})} step="0.5" min="-5" max="5" />
-                                    <ParamInput label="Width (σ)" val={packet.sigma} set={v=>setPacket({...packet, sigma:v})} step="0.1" min="0.5" max="3" />
-                                    <div className="mt-2 flex justify-end">
-                                        <button onClick={()=>init()} className="bg-pink-600 hover:bg-pink-500 text-white text-[10px] px-3 py-1 rounded font-bold">FIRE PACKET</button>
-                                    </div>
+                                <div className="mt-2 text-[9px] text-slate-400 font-bold mb-1">CLOUD DENSITY</div>
+                                <div className="flex gap-1">
+                                    {Object.entries(RESOLUTIONS).map(([k,v]) => (
+                                        <button key={k} onClick={()=>setResolution(k)} className={`flex-1 py-1 text-[8px] rounded border ${resolution===k?'bg-cyan-600 text-white':'bg-slate-800 text-slate-500'}`}>{v.label}</button>
+                                    ))}
                                 </div>
                             </div>
                         )}
 
-                        {tab === 'lab' && (
-                            <div className="p-4 space-y-4">
-                                <div className="bg-yellow-900/20 border border-yellow-500/30 p-4 rounded text-center">
-                                    <h3 className="text-yellow-400 font-bold font-display mb-2">Heisenberg Uncertainty</h3>
-                                    <div className="text-2xl font-mono text-white mb-1">
-                                        Δx · Δp ≥ ħ/2
-                                    </div>
-                                    <p className="text-xs text-slate-300 leading-relaxed">
-                                        Observe the "Width" slider. As you decrease σ (making position more certain), the wave packet spreads out faster because the momentum uncertainty Δp increases.
-                                    </p>
+                        {/* WAVE CONTROLS */}
+                        {activeModule === 'wave' && (
+                            <div className="glass-card p-3 border-l-2 border-pink-500">
+                                <div className="grid grid-cols-2 gap-2 mb-3">
+                                    <button onClick={()=>{setWaveState({...waveState, type:'packet'}); setTimeout(initWave, 50);}} className="p-2 border rounded text-[9px] hover:bg-white/10">FREE PACKET</button>
+                                    <button onClick={()=>{setWaveState({...waveState, type:'barrier'}); setTimeout(initWave, 50);}} className="p-2 border rounded text-[9px] hover:bg-white/10">TUNNEL BARRIER</button>
                                 </div>
-                                <div className="glass-card p-4">
-                                    <div className="text-[10px] font-bold text-slate-500 uppercase mb-2">Measurement</div>
-                                    <button 
-                                        onClick={() => {
-                                            // Collapse Wavefunction Logic
-                                            const { re, im, size, dx } = physRef.current;
-                                            let r = Math.random();
-                                            let cdf = 0;
-                                            for(let i=0; i<size; i++) {
-                                                const prob = (re[i]**2 + im[i]**2)*dx;
-                                                cdf += prob;
-                                                if(cdf >= r) {
-                                                    // Collapsed! Reset wave to sharp spike here
-                                                    re.fill(0); im.fill(0);
-                                                    re[i] = 10; // High spike
-                                                    if(toast) toast(`Observed at x = ${((i-size/2)*dx).toFixed(2)}`);
-                                                    vibrate();
-                                                    break;
-                                                }
-                                            }
-                                        }}
-                                        className="w-full py-3 bg-cyan-600 hover:bg-cyan-500 text-white font-bold rounded shadow-lg shadow-cyan-500/20 transition active:scale-95"
-                                    >
-                                        <Icons.Camera /> PERFORM MEASUREMENT
-                                    </button>
-                                    <p className="text-[9px] text-slate-500 mt-2 text-center">
-                                        Collapsing the wavefunction forces the particle into a definite position state.
-                                    </p>
+                                <ParamInput label={`Time Step Speed (${waveState.speed.toFixed(2)}x)`} val={waveState.speed} set={v=>setWaveState({...waveState, speed:v})} step="0.01" min="0.01" max="1.0" />
+                                <ParamInput label="Momentum (k)" val={waveState.k} set={v=>setWaveState({...waveState, k:v})} step="0.1" min="0" max="10" />
+                            </div>
+                        )}
+
+                        {/* MOLECULE CONTROLS */}
+                        {activeModule === 'bond' && (
+                            <div className="glass-card p-3 border-l-2 border-green-500">
+                                <div className="mb-2 uppercase text-[9px] text-green-500 font-bold">LCAO System</div>
+                                <select value={molState.type} onChange={e=>setMolState({...molState, type:e.target.value})} className="w-full bg-slate-800 text-white text-xs p-2 rounded mb-2 border border-white/10">
+                                    {Object.entries(MOLECULES).map(([k,v]) => <option key={k} value={k}>{v.label}</option>)}
+                                </select>
+                                <div className="flex gap-1 mt-2">
+                                    {Object.entries(RESOLUTIONS).map(([k,v]) => (
+                                        <button key={k} onClick={()=>setResolution(k)} className={`flex-1 py-1 text-[8px] rounded border ${resolution===k?'bg-green-600 text-white':'bg-slate-800 text-slate-500'}`}>{v.label}</button>
+                                    ))}
                                 </div>
                             </div>
                         )}
 
-                        {tab === 'theory' && (
-                            <div className="p-4 pb-20 space-y-6">
-                                <div className="paper-bg text-sm rounded-sm shadow-xl p-4">
-                                    <h3 className="text-black font-bold text-lg mb-2 border-b border-black/10 pb-1">Time-Dependent Schrödinger Eq.</h3>
-                                    <div className="my-3 text-center">
-                                        <Latex tex="i\hbar \frac{\partial}{\partial t} \Psi(x,t) = \left[ -\frac{\hbar^2}{2m}\frac{\partial^2}{\partial x^2} + V(x,t) \right] \Psi(x,t)" dark={false} />
-                                    </div>
-                                    <p>This equation describes how the quantum state of a physical system changes over time.</p>
-                                    
-                                    <h3 className="text-black font-bold text-lg mt-4 mb-2 border-b border-black/10 pb-1">Probability Density</h3>
-                                    <div className="my-3 text-center">
-                                        <Latex tex="P(x) = |\Psi(x,t)|^2 = \Psi^* \Psi" dark={false} />
-                                    </div>
-                                    <p>The height of the ribbon represents the probability of finding the particle at that location.</p>
-
-                                    <h3 className="text-black font-bold text-lg mt-4 mb-2 border-b border-black/10 pb-1">Complex Phase</h3>
-                                    <p>The color of the ribbon represents the complex phase angle. The wavefunction rotates in the complex plane as it evolves.</p>
-                                    <div className="my-3 text-center">
-                                        <Latex tex="\Psi(x,t) = A(x,t) e^{i\theta(x,t)}" dark={false} />
-                                    </div>
+                        {/* BLOCH CONTROLS */}
+                        {activeModule === 'bloch' && (
+                            <div className="glass-card p-3 border-l-2 border-purple-500">
+                                <div className="grid grid-cols-6 gap-1 mb-2">
+                                    {['X','Y','Z','H','S','T'].map(g => (
+                                        <button key={g} onClick={()=>applyGate(g)} className="aspect-square bg-slate-800 hover:bg-purple-900/50 border border-purple-500/30 rounded text-xs font-bold text-white transition">{g}</button>
+                                    ))}
                                 </div>
+                                <button onClick={()=>setBlochState(s=>({...s, autoPrecess:!s.autoPrecess}))} className={`w-full py-1 text-[9px] rounded border ${blochState.autoPrecess?'bg-purple-500 text-white':'bg-slate-800 text-slate-400'}`}>AUTO PRECESSION</button>
                             </div>
                         )}
 
+                        <button onClick={generateReport} className="w-full mt-4 bg-cyan-700 hover:bg-cyan-600 text-white py-3 rounded text-xs font-bold flex items-center justify-center gap-2 shadow-lg transition">
+                            <Icons.Book /> EXPORT PDF REPORT
+                        </button>
                     </div>
                 </div>
             )}
